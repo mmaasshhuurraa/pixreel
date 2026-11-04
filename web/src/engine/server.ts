@@ -1,5 +1,5 @@
 /** Client for the PixReel HTTP API (api/). */
-import type { Item, Progress, RenderOptions, RenderResult } from "./types";
+import type { Item, MusicInput, Progress, RenderOptions, RenderResult } from "./types";
 
 const STORAGE_KEY = "pixreel.apiUrl";
 
@@ -54,7 +54,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export async function renderOnServer(
   items: Item[],
   opts: RenderOptions,
-  audio: File[],
+  audio: MusicInput[],
   onProgress: (p: Progress) => void,
   signal: AbortSignal,
 ): Promise<RenderResult> {
@@ -63,7 +63,8 @@ export async function renderOnServer(
 
   const form = new FormData();
   for (const it of items) form.append("files", it.file, it.file.name);
-  for (const track of audio) form.append("audio", track, track.name);
+  for (const track of audio) form.append("audio", track.file, track.file.name);
+  form.append("audio_volumes", audio.map((a) => a.volume).join(","));
   for (const [k, v] of Object.entries(opts)) form.append(k, String(v));
 
   const job = await upload(`${base}/v1/jobs`, form, (v) => onProgress({ stage: "upload", value: v }), signal);

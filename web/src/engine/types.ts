@@ -58,9 +58,14 @@ export const defaultOptions: RenderOptions = {
   video_volume: 1,
 };
 
-export interface Track {
-  id: string;
+/** A music track as passed to the renderers. */
+export interface MusicInput {
   file: File;
+  volume: number; // 0..2
+}
+
+export interface Track extends MusicInput {
+  id: string;
   /** Seconds; undefined while reading, null if unknown. */
   duration?: number | null;
 }

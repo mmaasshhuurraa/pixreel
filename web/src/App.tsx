@@ -102,7 +102,7 @@ export default function App() {
     setError(null);
     if (result) URL.revokeObjectURL(result.url);
     setResult(null);
-    const audio = tracks.map((tr) => tr.file);
+    const audio = tracks.map((tr) => ({ file: tr.file, volume: tr.volume }));
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setProgress({ stage: "render", value: 0 });

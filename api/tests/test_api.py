@@ -327,3 +327,31 @@ def test_volumes(samples, clips, tmp_path):
         assert r.status_code == 200, r.text
         return _mean_volume(r.content, tmp_path)
     assert abs((clip("1") - clip("0.25")) - 12) < 1.5
+
+
+def test_track_volumes(samples, tmp_path):
+    tracks = []
+    for k in range(2):
+        p = tmp_path / f"t{k}.wav"
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=f=440:d=3", str(p)], check=True)
+        tracks.append(("audio", (p.name, p.read_bytes())))
+    files = [("files", ("photo.jpg", samples["photo.jpg"].read_bytes())), *tracks]
+    r = client.post("/v1/convert", files=files, data={"width": "160", "height": "90", "fps": "10", "duration": "6",
+                                                      "audio_volumes": "1,0.25"})
+    assert r.status_code == 200, r.text
+    out = tmp_path / "o.mp4"
+    out.write_bytes(r.content)
+
+    def level(start, length):
+        o = subprocess.run(["ffmpeg", "-ss", str(start), "-t", str(length), "-i", str(out), "-af", "volumedetect",
+                            "-f", "null", "-"], capture_output=True, text=True).stderr
+        import re
+        return float(re.search(r"mean_volume: (-?[\d.]+) dB", o).group(1))
+
+    assert abs((level(0.5, 2) - level(3.2, 1)) - 12) < 1.5  # second track at 25 % is about -12 dB
+
+
+def test_bad_audio_volumes(samples):
+    r = client.post("/v1/jobs", files=[("files", ("a.jpg", samples["photo.jpg"].read_bytes()))],
+                    data={"audio_volumes": "1,loud"})
+    assert r.status_code == 422

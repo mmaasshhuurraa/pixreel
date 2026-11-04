@@ -124,7 +124,14 @@ def options_form(
     music_loop: Annotated[bool, Form(description="Repeat the music if it is shorter than the video")] = False,
     music_volume: Annotated[float, Form(ge=0, le=2, description="1 = original volume")] = 1.0,
     video_volume: Annotated[float, Form(ge=0, le=2, description="Volume of video clip sound, 1 = original")] = 1.0,
+    audio_volumes: Annotated[
+        str, Form(description="Volume of each music track, comma separated in `audio` order, e.g. 1,0.6,1.3")
+    ] = "",
 ) -> RenderOptions:
+    try:
+        track_volumes = tuple(float(v) for v in audio_volumes.split(",") if v.strip())
+    except ValueError as e:
+        raise HTTPException(422, "audio_volumes must be numbers separated by commas") from e
     return RenderOptions(
         width=width, height=height, fps=fps, duration=duration, fit=fit,
         background=background, transition=transition,
@@ -132,6 +139,7 @@ def options_form(
         quality=quality, animate=animate, video_audio=video_audio,
         music_transition=music_transition, music_transition_duration=music_transition_duration,
         music_loop=music_loop, music_volume=music_volume, video_volume=video_volume,
+        track_volumes=track_volumes,
     )
 
 

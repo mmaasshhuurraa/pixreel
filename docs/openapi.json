@@ -503,6 +503,12 @@
             "title": "Video Volume",
             "description": "Volume of video clip sound, 1 = original",
             "default": 1.0
+          },
+          "audio_volumes": {
+            "type": "string",
+            "title": "Audio Volumes",
+            "description": "Volume of each music track, comma separated in `audio` order, e.g. 1,0.6,1.3",
+            "default": ""
           }
         },
         "type": "object",
@@ -681,6 +687,12 @@
             "title": "Video Volume",
             "description": "Volume of video clip sound, 1 = original",
             "default": 1.0
+          },
+          "audio_volumes": {
+            "type": "string",
+            "title": "Audio Volumes",
+            "description": "Volume of each music track, comma separated in `audio` order, e.g. 1,0.6,1.3",
+            "default": ""
           }
         },
         "type": "object",

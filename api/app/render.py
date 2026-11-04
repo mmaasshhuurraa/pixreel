@@ -54,6 +54,7 @@ class RenderOptions:
     music_loop: bool = False  # repeat the music list if it is shorter than the video
     music_volume: float = 1.0  # 0..2, 1 = unchanged
     video_volume: float = 1.0  # 0..2, sound of video clips
+    track_volumes: tuple[float, ...] = ()  # 0..2 per music track, in upload order; missing = 1
     max_side: int = 4096
 
     def validate(self) -> None:
@@ -77,6 +78,8 @@ class RenderOptions:
             raise ValueError("music_transition must be one of: " + ", ".join(MUSIC_TRANSITIONS))
         if not (0 <= self.music_volume <= 2 and 0 <= self.video_volume <= 2):
             raise ValueError("music_volume and video_volume must be between 0 and 2")
+        if any(not (0 <= v <= 2) for v in self.track_volumes):
+            raise ValueError("audio_volumes must be between 0 and 2")
         if not (0 <= self.music_transition_duration <= 30):
             raise ValueError("music_transition_duration must be between 0 and 30 seconds")
         ImageColor.getrgb(self.background)
@@ -213,7 +216,8 @@ def _mux_audio(
     for p in placed:
         cmd += ["-i", str(music[p.index])]
         k = len(labels) + len(music_labels)
-        chain = f"[{k + 1}:a:0]atrim=0:{p.length:.3f},asetpts=PTS-STARTPTS,{norm}"
+        track_volume = opts.track_volumes[p.index] if p.index < len(opts.track_volumes) else 1.0
+        chain = f"[{k + 1}:a:0]atrim=0:{p.length:.3f},asetpts=PTS-STARTPTS,{norm},volume={track_volume}"
         if p.fade_in:
             chain += f",afade=t=in:d={p.fade_in:.3f}"
         if p.fade_out:

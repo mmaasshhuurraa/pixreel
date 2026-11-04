@@ -26,6 +26,7 @@ For small jobs there is a one-shot shortcut: `POST /v1/convert` takes the same f
 | `music_loop` | bool | false | start the track list again if it ends before the video |
 | `music_volume` | 0 to 2 | 1 | music volume, 1 = original, 0.5 = half, 2 = double |
 | `video_volume` | 0 to 2 | 1 | volume of the sound of video clips (with `video_audio`) |
+| `audio_volumes` | text | empty | volume of each music track in `audio` order, comma separated, e.g. `1,0.6,1.3`. Multiplied by `music_volume` |
 | `sort` | `none` \| `name` \| `name_desc` | `none` | sort files by file name, A→Z or Z→A |
 | `width`, `height` | 16 to 3840 | 1920 × 1080 | rounded down to even numbers |
 | `fps` | 1 to 60 | 30 | |

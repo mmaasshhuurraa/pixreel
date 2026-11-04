@@ -22,7 +22,7 @@ import { GIFEncoder, applyPalette, quantize } from "gifenc";
 import { drawTransition, picker } from "./transitions";
 import { plan } from "./playlist";
 import { decodeFrames, decodeVideoAudio, type DecodedFrame } from "./decode";
-import { MIME, type Item, type OutFormat, type Progress, type RenderOptions, type RenderResult } from "./types";
+import { MIME, type Item, type MusicInput, type OutFormat, type Progress, type RenderOptions, type RenderResult } from "./types";
 
 export class BrowserUnsupported extends Error {}
 
@@ -152,7 +152,7 @@ const RATE = 48000;
 /** Mix clip sound (at its place in the video) and the music playlist into one buffer. */
 async function mixAudio(
   seconds: number,
-  music: File[],
+  music: MusicInput[],
   clips: { file: File; start: number; length: number }[],
   opts: RenderOptions,
 ): Promise<AudioBuffer> {
@@ -172,7 +172,7 @@ async function mixAudio(
   }
   if (music.length) {
     const buffers: (AudioBuffer | null)[] = [];
-    for (const f of music) buffers.push(await ctx.decodeAudioData(await f.arrayBuffer()).catch(() => null));
+    for (const m of music) buffers.push(await ctx.decodeAudioData(await m.file.arrayBuffer()).catch(() => null));
     const placed = plan(
       buffers.map((b) => b?.duration ?? 0),
       opts.music_transition,
@@ -194,10 +194,11 @@ async function mixAudio(
       src.buffer = buffers[p.index]!;
       const g = ctx.createGain();
       const end = p.start + p.length;
-      g.gain.setValueAtTime(p.fadeIn ? 0 : 1, p.start);
-      if (p.fadeIn) g.gain.linearRampToValueAtTime(1, p.start + p.fadeIn);
+      const v = music[p.index].volume;
+      g.gain.setValueAtTime(p.fadeIn ? 0 : v, p.start);
+      if (p.fadeIn) g.gain.linearRampToValueAtTime(v, p.start + p.fadeIn);
       if (p.fadeOut) {
-        g.gain.setValueAtTime(1, end - p.fadeOut);
+        g.gain.setValueAtTime(v, end - p.fadeOut);
         g.gain.linearRampToValueAtTime(0, end);
       }
       src.connect(g).connect(master);
@@ -210,7 +211,7 @@ async function mixAudio(
 export async function renderInBrowser(
   items: Item[],
   opts: RenderOptions,
-  audio: File[],
+  audio: MusicInput[],
   onProgress: (p: Progress) => void,
   signal: AbortSignal,
 ): Promise<RenderResult> {

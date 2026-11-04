@@ -468,6 +468,11 @@ export default function App() {
           {error && <p className="error">{error}</p>}
         </aside>
       </main>
+      <footer>
+        <a href="https://github.com/mmaasshhuurraa/pixreel/blob/main/CHANGELOG.md" target="_blank" rel="noreferrer">
+          PixReel v{__APP_VERSION__}
+        </a>
+      </footer>
     </div>
   );
 }

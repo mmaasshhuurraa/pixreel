@@ -73,3 +73,11 @@ VITE_API_URL=http://localhost:7860 npm run dev
 curl -F files=@1.jpg -F files=@2.heic -F duration=3 -F transition=crossfade -o video.mp4 \
   https://<hf-user>-pixreel-api.hf.space/v1/convert
 ```
+
+## Ветки и релизы
+
+- `main`: только релизы. Каждый пуш в `main` публикует сайт.
+- `develop`: текущая разработка.
+- `feature/<название>`: отдельная ветка на каждую фичу, создаётся от `develop` и вливается обратно в `develop`.
+- Релиз: `develop` вливается в `main`, затем ставится тег `vX.Y.Z` и обновляется [CHANGELOG.md](CHANGELOG.md).
+  Версия задаётся в `web/package.json` и `api/app/__init__.py`.

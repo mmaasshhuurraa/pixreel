@@ -79,5 +79,6 @@ curl -F files=@1.jpg -F files=@2.heic -F duration=3 -F transition=crossfade -o v
 - `main`: только релизы. Каждый пуш в `main` публикует сайт.
 - `develop`: текущая разработка.
 - `feature/<название>`: отдельная ветка на каждую фичу, создаётся от `develop` и вливается обратно в `develop`.
-- Релиз: `develop` вливается в `main`, затем ставится тег `vX.Y.Z` и обновляется [CHANGELOG.md](CHANGELOG.md).
-  Версия задаётся в `web/package.json` и `api/app/__init__.py`.
+- Релиз: поднять версию в `web/package.json` и `api/app/__init__.py`, добавить раздел `## [X.Y.Z]`
+  в [CHANGELOG.md](CHANGELOG.md), влить `develop` в `main`. Тег `vX.Y.Z` и GitHub-релиз с текстом
+  из CHANGELOG создаст workflow `.github/workflows/release.yml`.

@@ -1,0 +1,63 @@
+# Creates the tag vX.Y.Z and a GitHub release when main gets a version
+# that has no tag yet. Version: web/package.json (api/app/__init__.py must match).
+# Release notes: the "## [X.Y.Z]" section of CHANGELOG.md.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: |
+          web=$(node -p "require('./web/package.json').version")
+          api=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' api/app/__init__.py)
+          if [ "$web" != "$api" ]; then
+            echo "::error::Version mismatch: web/package.json=$web, api/app/__init__.py=$api"
+            exit 1
+          fi
+          echo "version=$web" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if the tag exists
+        id: tag
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v${{ steps.version.outputs.version }}" >/dev/null; then
+            echo "Tag v${{ steps.version.outputs.version }} already exists, nothing to do."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Release notes from CHANGELOG.md
+        if: steps.tag.outputs.exists != 'true'
+        run: |
+          awk -v v="${{ steps.version.outputs.version }}" '
+            index($0, "## [" v "]") == 1 { found = 1; next }
+            found && (/^## \[/ || /^\[[^]]+\]: /) { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error::CHANGELOG.md has no section for ${{ steps.version.outputs.version }}"
+            exit 1
+          fi
+          cat notes.md
+
+      - name: Create tag and release
+        if: steps.tag.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ steps.version.outputs.version }}"
+          gh release create "v$v" --target "$GITHUB_SHA" --title "PixReel $v" --notes-file notes.md

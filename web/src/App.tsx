@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { makeThumb } from "./engine/decode";
+import { kindOf, probe } from "./engine/decode";
+import { formatDuration, itemEstimate, totalEstimate } from "./engine/duration";
+import { ACCEPT, isAccepted } from "./formats";
 import { BrowserUnsupported, browserCanRender, renderInBrowser } from "./engine/browser";
 // setApiUrl is used by the hidden "Where to convert" block below.
 import { checkServer, getApiUrl, renderOnServer /*, setApiUrl */ } from "./engine/server";
@@ -13,10 +15,6 @@ const PRESETS = [
   { label: `${t.presetPortrait} 1080×1920`, w: 1080, h: 1920 },
   { label: `${t.presetSquare} 1080×1080`, w: 1080, h: 1080 },
 ];
-
-const ACCEPT =
-  "image/*,.heic,.heif,.avif,.jxl,.psd,.tif,.tiff,.tga,.ico,.svg,.pdf,.exr,.hdr,.xcf,.dds,.qoi,.jp2," +
-  ".cr2,.cr3,.nef,.arw,.dng,.orf,.raf,.rw2,.pef,.srw";
 
 let nextId = 0;
 
@@ -32,6 +30,7 @@ export default function App() {
   const [result, setResult] = useState<(RenderResult & { url: string }) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [rejected, setRejected] = useState<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const dragIndex = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -45,12 +44,16 @@ export default function App() {
   const set = <K extends keyof RenderOptions>(k: K, v: RenderOptions[K]) => setOpts((o) => ({ ...o, [k]: v }));
 
   async function addFiles(list: FileList | File[]) {
-    const files = Array.from(list).filter((f) => !f.type.startsWith("audio/") && !f.type.startsWith("video/"));
-    const fresh: Item[] = files.map((file) => ({ id: String(nextId++), file, thumb: null, browserOk: null }));
+    const all = Array.from(list);
+    const files = all.filter(isAccepted);
+    setRejected(all.filter((f) => !isAccepted(f)).map((f) => f.name));
+    const fresh: Item[] = files.map((file) => ({
+      id: String(nextId++), file, kind: kindOf(file), thumb: null, browserOk: null,
+    }));
     setItems((prev) => [...prev, ...fresh]);
     for (const it of fresh) {
-      const thumb = await makeThumb(it.file);
-      setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, thumb, browserOk: thumb !== null } : p)));
+      const info = await probe(it.file);
+      setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, ...info } : p)));
     }
   }
 
@@ -63,10 +66,9 @@ export default function App() {
     });
   }
 
-  const estimate = useMemo(() => {
-    const trans = opts.transition === "crossfade" ? opts.transition_duration : 0;
-    return items.length * opts.duration + Math.max(0, items.length - 1) * trans;
-  }, [items.length, opts]);
+  const estimate = useMemo(() => totalEstimate(items, opts), [items, opts]);
+  const hasVideo = items.some((i) => i.kind === "video");
+  const totalLabel = `${estimate.exact ? "" : "≈ "}${formatDuration(estimate.seconds)}`;
 
   const needsServer = items.some((i) => i.browserOk === false);
 
@@ -95,6 +97,8 @@ export default function App() {
         // Browser can't encode this? Retry on the server in auto mode.
         if (e instanceof BrowserUnsupported && engine === "auto" && serverOk) {
           res = await renderOnServer(items, opts, audio, setProgress, ctrl.signal);
+        } else if (e instanceof BrowserUnsupported) {
+          throw new Error(t.browserCannot);
         } else throw e;
       }
       setResult({ ...res, url: URL.createObjectURL(res.blob) });
@@ -151,11 +155,17 @@ export default function App() {
             />
           </div>
 
+          {rejected.length > 0 && (
+            <p className="warn">
+              {t.rejected} {rejected.join(", ")}
+            </p>
+          )}
+
           {items.length > 0 && (
             <>
               <div className="toolbar">
                 <span>
-                  {t.files}: {items.length} · {t.estimate} {estimate.toFixed(1)} {t.sec}
+                  {t.files}: {items.length} · {t.estimate} <b>{totalLabel}</b>
                 </span>
                 <span>
                   <button
@@ -198,6 +208,15 @@ export default function App() {
                     <button className="x" aria-label={t.remove} onClick={() => setItems((p) => p.filter((x) => x.id !== it.id))}>
                       ×
                     </button>
+                    <span className="dur">
+                      {it.kind === "video" && "▶ "}
+                      {(() => {
+                        const e = itemEstimate(it, opts);
+                        if (it.browserOk === null) return "…";
+                        if (!e.exact && e.seconds === 0) return "?";
+                        return `${e.exact ? "" : "≈"}${formatDuration(e.seconds)}`;
+                      })()}
+                    </span>
                     <span className="name">{it.file.name}</span>
                   </li>
                 ))}
@@ -307,7 +326,8 @@ export default function App() {
               <select value={opts.format} onChange={(e) => set("format", e.target.value as RenderOptions["format"])}>
                 <option value="mp4">MP4 (H.264)</option>
                 <option value="webm">WebM (VP9)</option>
-                <option value="gif">GIF</option>
+                {/* GIF needs the server (api/), which is not connected yet. */}
+                {/* <option value="gif">GIF</option> */}
               </select>
             </label>
             <label>
@@ -323,6 +343,12 @@ export default function App() {
             <input type="checkbox" checked={opts.animate} onChange={(e) => set("animate", e.target.checked)} />
             {t.animate}
           </label>
+          {hasVideo && opts.format !== "gif" && (
+            <label className="inline">
+              <input type="checkbox" checked={opts.video_audio} onChange={(e) => set("video_audio", e.target.checked)} />
+              {t.videoAudio}
+            </label>
+          )}
           {opts.format !== "gif" && (
             <label>
               {t.audio}
@@ -383,6 +409,7 @@ export default function App() {
           ) : (
             <button className="btn primary" disabled={items.length === 0} onClick={convert}>
               {t.convert}
+              {items.length > 0 && ` · ${totalLabel}`}
             </button>
           )}
           {error && <p className="error">{error}</p>}

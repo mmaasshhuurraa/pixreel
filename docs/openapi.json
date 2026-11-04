@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "PixReel API",
-    "description": "Convert images in almost any format (JPEG, PNG, WebP, HEIC, AVIF, JXL, RAW, PSD, TIFF, SVG, PDF, GIF...) into a single MP4, WebM or GIF video.",
+    "description": "Convert images (and video clips) in almost any format (JPEG, PNG, WebP, HEIC, AVIF, JXL, RAW, PSD, TIFF, SVG, PDF, GIF...) into a single MP4, WebM or GIF video.",
     "version": "0.1.0"
   },
   "paths": {
@@ -452,6 +452,12 @@
             "title": "Animate",
             "description": "Play frames of animated GIF/WebP/APNG",
             "default": true
+          },
+          "video_audio": {
+            "type": "boolean",
+            "title": "Video Audio",
+            "description": "Keep the sound of uploaded video clips",
+            "default": false
           }
         },
         "type": "object",
@@ -469,7 +475,7 @@
             },
             "type": "array",
             "title": "Files",
-            "description": "Images, in the order they should appear"
+            "description": "Images and video clips, in the order they should appear"
           },
           "audio": {
             "anyOf": [
@@ -579,6 +585,12 @@
             "title": "Animate",
             "description": "Play frames of animated GIF/WebP/APNG",
             "default": true
+          },
+          "video_audio": {
+            "type": "boolean",
+            "title": "Video Audio",
+            "description": "Keep the sound of uploaded video clips",
+            "default": false
           }
         },
         "type": "object",

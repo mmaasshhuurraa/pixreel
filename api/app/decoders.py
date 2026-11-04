@@ -8,6 +8,7 @@ multi-page documents it is None and the job's per-image duration is used.
 from __future__ import annotations
 
 import io
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -53,7 +54,14 @@ MAGICK_EXTS = {
     ".xpm", ".jng", ".mng", ".otb", ".pcd", ".art", ".fax", ".viff", ".palm",
 }
 
-SUPPORTED_EXTS = RAW_EXTS | SVG_EXTS | PDF_EXTS | PILLOW_EXTS | MAGICK_EXTS
+VIDEO_EXTS = {
+    ".mp4", ".m4v", ".mov", ".qt", ".webm", ".mkv", ".avi", ".wmv", ".asf",
+    ".flv", ".3gp", ".3g2", ".mpg", ".mpeg", ".m2v", ".ts", ".mts", ".m2ts",
+    ".ogv", ".vob", ".mxf", ".dv",
+}
+
+IMAGE_EXTS = RAW_EXTS | SVG_EXTS | PDF_EXTS | PILLOW_EXTS | MAGICK_EXTS
+SUPPORTED_EXTS = IMAGE_EXTS | VIDEO_EXTS
 
 
 class DecodeError(Exception):
@@ -68,7 +76,30 @@ def supported_formats() -> dict[str, list[str]]:
         "vector": strip(SVG_EXTS),
         "document": strip(PDF_EXTS),
         "other": strip(MAGICK_EXTS),
+        "video": strip(VIDEO_EXTS),
     }
+
+
+def is_video(path: Path) -> bool:
+    return path.suffix.lower() in VIDEO_EXTS
+
+
+def probe_video(path: Path) -> dict:
+    """Duration in seconds and whether the file has a video and an audio stream."""
+    proc = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type",
+         "-of", "json", str(path)],
+        capture_output=True, timeout=60,
+    )
+    if proc.returncode != 0:
+        raise DecodeError(f"{path.name}: cannot read video")
+    data = json.loads(proc.stdout or b"{}")
+    types = {s.get("codec_type") for s in data.get("streams", [])}
+    try:
+        duration = float(data.get("format", {}).get("duration", 0))
+    except (TypeError, ValueError):
+        duration = 0.0
+    return {"duration": duration, "has_video": "video" in types, "has_audio": "audio" in types}
 
 
 def load_frames(path: Path, animate: bool = True, max_side: int = 4096) -> Iterator[Frame]:

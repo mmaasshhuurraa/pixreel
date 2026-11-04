@@ -22,7 +22,7 @@ AUDIO_EXTS = {".mp3", ".m4a", ".aac", ".wav", ".ogg", ".oga", ".opus", ".flac", 
 app = FastAPI(
     title="PixReel API",
     version=__version__,
-    description="Convert images in almost any format (JPEG, PNG, WebP, HEIC, AVIF, JXL, "
+    description="Convert images (and video clips) in almost any format (JPEG, PNG, WebP, HEIC, AVIF, JXL, "
     "RAW, PSD, TIFF, SVG, PDF, GIF...) into a single MP4, WebM or GIF video.",
 )
 app.add_middleware(
@@ -109,12 +109,13 @@ def options_form(
     format: Annotated[Literal["mp4", "webm", "gif"], Form()] = "mp4",
     quality: Annotated[Literal["low", "medium", "high"], Form()] = "medium",
     animate: Annotated[bool, Form(description="Play frames of animated GIF/WebP/APNG")] = True,
+    video_audio: Annotated[bool, Form(description="Keep the sound of uploaded video clips")] = False,
 ) -> RenderOptions:
     return RenderOptions(
         width=width, height=height, fps=fps, duration=duration, fit=fit,
         background=background, transition=transition,
         transition_duration=transition_duration, format=format,
-        quality=quality, animate=animate,
+        quality=quality, animate=animate, video_audio=video_audio,
     )
 
 
@@ -144,7 +145,7 @@ def formats() -> dict:
 
 @app.post("/v1/jobs", status_code=202, tags=["jobs"], dependencies=[Depends(check_key)])
 async def create_job(
-    files: Annotated[list[UploadFile], File(description="Images, in the order they should appear")],
+    files: Annotated[list[UploadFile], File(description="Images and video clips, in the order they should appear")],
     opts: Annotated[RenderOptions, Depends(options_form)],
     audio: Annotated[UploadFile | None, File(description="Optional background music")] = None,
     sort: Annotated[Literal["none", "name"], Form()] = "none",

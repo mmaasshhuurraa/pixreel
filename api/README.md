@@ -44,6 +44,7 @@ pip install -r requirements-dev.txt && pytest -q
 | `PIXREEL_MAX_TOTAL_MB` | 1000 | size of all files in one job |
 | `PIXREEL_MAX_QUEUE` | 20 | jobs waiting at once, then 503 |
 | `PIXREEL_WORKERS` | 1 | jobs rendered in parallel |
+| `PIXREEL_MAX_SECONDS` | 1800 | max length of the output video |
 | `PIXREEL_JOB_TTL` | 3600 | seconds a finished video is kept |
 | `PIXREEL_API_KEYS` | empty | comma separated keys; if set, clients must send `X-API-Key` |
 | `PIXREEL_CORS_ORIGINS` | `*` | comma separated allowed origins |

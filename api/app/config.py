@@ -13,6 +13,7 @@ class Settings:
     max_total_mb: int = int(os.getenv("PIXREEL_MAX_TOTAL_MB", "1000"))
     max_queue: int = int(os.getenv("PIXREEL_MAX_QUEUE", "20"))
     workers: int = int(os.getenv("PIXREEL_WORKERS", "1"))
+    max_seconds: int = int(os.getenv("PIXREEL_MAX_SECONDS", "1800"))  # output length
     job_ttl: int = int(os.getenv("PIXREEL_JOB_TTL", "3600"))  # seconds
     # Empty list = API is open. Otherwise clients must send X-API-Key.
     api_keys: list[str] = field(default_factory=lambda: _list("PIXREEL_API_KEYS"))

@@ -19,7 +19,7 @@ For small jobs there is a one-shot shortcut: `POST /v1/convert` takes the same f
 
 | Field | Type | Default | Notes |
 |---|---|---|---|
-| `files` | file, repeated | (required) | images, in the order they should appear |
+| `files` | file, repeated | (required) | images and video clips, in the order they should appear |
 | `audio` | file | none | mp3, m4a, aac, wav, ogg, opus, flac; trimmed to the video and faded out |
 | `sort` | `none` \| `name` | `none` | `name` sorts files by file name |
 | `width`, `height` | 16 to 3840 | 1920 × 1080 | rounded down to even numbers |
@@ -32,6 +32,14 @@ For small jobs there is a one-shot shortcut: `POST /v1/convert` takes the same f
 | `format` | `mp4` \| `webm` \| `gif` | `mp4` | H.264 / VP9 / GIF |
 | `quality` | `low` \| `medium` \| `high` | `medium` | |
 | `animate` | bool | true | play frames of animated GIF / WebP / APNG with their own timing |
+| `video_audio` | bool | false | keep the sound of video clips (placed where each clip plays; music, if any, is mixed in at half volume) |
+
+Video clips (mp4, mov, webm, mkv, avi, wmv, flv, 3gp, mpg, ts, mts, ogv…) play at full length,
+resampled to `fps` and fitted with the same `fit` mode as images.
+
+Output length = sum of: `duration` per still image, own timing for animations, full length for clips,
+plus `transition_duration` between neighbours. Each part is rounded to whole frames at `fps`.
+Limit: `PIXREEL_MAX_SECONDS` (default 1800 s).
 
 ## Job object
 

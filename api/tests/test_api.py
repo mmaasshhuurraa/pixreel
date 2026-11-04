@@ -151,3 +151,60 @@ def test_skips_broken_file(samples):
     files = [("files", ("photo.jpg", samples["photo.jpg"].read_bytes())), ("files", ("broken.png", b"not a png"))]
     r = client.post("/v1/convert", files=files, data={"width": "160", "height": "120", "duration": "0.2"})
     assert r.status_code == 200
+
+
+@pytest.fixture(scope="session")
+def clips(tmp_path_factory) -> dict[str, Path]:
+    d = tmp_path_factory.mktemp("clips")
+    with_sound = d / "clip.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=d=1.5:s=320x240:r=25",
+                    "-f", "lavfi", "-i", "sine=d=1.5", "-shortest", "-pix_fmt", "yuv420p", str(with_sound)], check=True)
+    portrait = d / "portrait.mov"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=d=1:s=180x320:r=30",
+                    "-pix_fmt", "yuv420p", str(portrait)], check=True)
+    return {"clip.mp4": with_sound, "portrait.mov": portrait}
+
+
+@pytest.mark.parametrize("fit", ["contain", "cover", "blur"])
+def test_images_and_videos(samples, clips, tmp_path, fit):
+    files = [
+        ("files", ("photo.jpg", samples["photo.jpg"].read_bytes())),
+        ("files", ("clip.mp4", clips["clip.mp4"].read_bytes())),
+        ("files", ("portrait.mov", clips["portrait.mov"].read_bytes())),
+    ]
+    r = client.post("/v1/convert", files=files, data={
+        "width": "320", "height": "180", "fps": "10", "duration": "1", "fit": fit,
+        "transition": "crossfade", "transition_duration": "0.5",
+    })
+    assert r.status_code == 200, r.text
+    info = _probe(r.content, ".mp4", tmp_path)
+    # 1 s photo + 1.5 s clip + 1 s clip + 2 transitions of 0.5 s = 4.5 s
+    assert abs(float(info["format"]["duration"]) - 4.5) < 0.15
+    # Clip sound is off by default.
+    assert {s["codec_type"] for s in info["streams"]} == {"video"}
+
+
+def test_video_audio_on(samples, clips, tmp_path):
+    files = [
+        ("files", ("photo.jpg", samples["photo.jpg"].read_bytes())),
+        ("files", ("clip.mp4", clips["clip.mp4"].read_bytes())),
+    ]
+    r = client.post("/v1/convert", files=files, data={
+        "width": "320", "height": "180", "fps": "10", "duration": "1", "video_audio": "true",
+    })
+    assert r.status_code == 200, r.text
+    info = _probe(r.content, ".mp4", tmp_path)
+    assert {s["codec_type"] for s in info["streams"]} == {"video", "audio"}
+    assert abs(float(info["format"]["duration"]) - 2.5) < 0.15
+
+
+def test_video_audio_with_music_webm(clips, tmp_path):
+    wav = tmp_path / "m.wav"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=f=220:d=10", str(wav)], check=True)
+    files = [("files", ("clip.mp4", clips["clip.mp4"].read_bytes())), ("audio", ("m.wav", wav.read_bytes()))]
+    r = client.post("/v1/convert", files=files, data={
+        "width": "320", "height": "180", "fps": "10", "format": "webm", "video_audio": "true",
+    })
+    assert r.status_code == 200, r.text
+    info = _probe(r.content, ".webm", tmp_path)
+    assert {s["codec_name"] for s in info["streams"]} == {"vp9", "opus"}

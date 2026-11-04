@@ -71,6 +71,10 @@ main { display: grid; grid-template-columns: 1fr 320px; gap: 20px; align-items: 
 }
 .grid .num { left: 6px; }
 .grid .x { right: 6px; cursor: pointer; font-size: 16px; line-height: 1; }
+.grid .dur {
+  position: absolute; right: 6px; bottom: 24px; padding: 1px 6px; border-radius: 6px; font-size: 11px;
+  background: rgba(0, 0, 0, .6); color: #fff; font-variant-numeric: tabular-nums;
+}
 .grid .name {
   position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 6px; font-size: 11px;
   background: rgba(0, 0, 0, .55); color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;

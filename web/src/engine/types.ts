@@ -1,3 +1,5 @@
+import type { Kind, Probe } from "./decode";
+
 export type Fit = "contain" | "cover" | "blur";
 export type OutFormat = "mp4" | "webm" | "gif";
 export type Quality = "low" | "medium" | "high";
@@ -16,6 +18,7 @@ export interface RenderOptions {
   format: OutFormat;
   quality: Quality;
   animate: boolean;
+  video_audio: boolean;
 }
 
 export const defaultOptions: RenderOptions = {
@@ -30,14 +33,16 @@ export const defaultOptions: RenderOptions = {
   format: "mp4",
   quality: "medium",
   animate: true,
+  video_audio: false,
 };
 
-export interface Item {
+export interface Item extends Partial<Omit<Probe, "browserOk" | "thumb" | "kind">> {
   id: string;
   file: File;
+  kind: Kind;
   /** Small preview, or null if the browser cannot decode this format. */
   thumb: string | null;
-  /** true once we know the browser can decode it, false if it cannot. */
+  /** null while probing, then whether the browser can decode it. */
   browserOk: boolean | null;
 }
 

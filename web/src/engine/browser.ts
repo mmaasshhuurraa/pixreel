@@ -15,7 +15,7 @@ import {
   canEncodeAudio,
   canEncodeVideo,
 } from "mediabunny";
-import { decodeFrames, type DecodedFrame } from "./decode";
+import { decodeFrames, decodeVideoAudio, type DecodedFrame } from "./decode";
 import type { Item, Progress, RenderOptions, RenderResult } from "./types";
 
 export class BrowserUnsupported extends Error {}
@@ -23,9 +23,15 @@ export class BrowserUnsupported extends Error {}
 const QUALITY = { low: QUALITY_LOW, medium: QUALITY_MEDIUM, high: QUALITY_HIGH };
 
 function codecsFor(format: RenderOptions["format"]) {
-  if (format === "mp4") return { video: "avc", audio: "aac" } as const;
-  if (format === "webm") return { video: "vp9", audio: "opus" } as const;
+  if (format === "mp4") return { video: "avc" } as const;
+  if (format === "webm") return { video: "vp9" } as const;
   throw new BrowserUnsupported("GIF is rendered on the server");
+}
+
+/** AAC is missing in some browsers (Firefox, Chromium on Linux); MP4 can carry Opus instead. */
+async function pickAudioCodec(format: RenderOptions["format"]): Promise<"aac" | "opus" | null> {
+  if (format === "mp4" && (await canEncodeAudio("aac"))) return "aac";
+  return (await canEncodeAudio("opus")) ? "opus" : null;
 }
 
 /** Can this browser produce the requested video at all? */
@@ -34,7 +40,7 @@ export async function browserCanRender(opts: RenderOptions, withAudio: boolean):
   const c = codecsFor(opts.format);
   const size = even(opts);
   if (!(await canEncodeVideo(c.video, { width: size.width, height: size.height }))) return false;
-  if (withAudio && !(await canEncodeAudio(c.audio))) return false;
+  if (withAudio && !(await pickAudioCodec(opts.format))) return false;
   return true;
 }
 
@@ -68,23 +74,40 @@ function draw(ctx: CanvasRenderingContext2D, f: DecodedFrame, o: RenderOptions) 
   ctx.restore();
 }
 
-async function loadAudio(file: File, seconds: number): Promise<AudioBuffer> {
-  const ctx = new AudioContext();
-  try {
-    const buf = await ctx.decodeAudioData(await file.arrayBuffer());
-    const length = Math.min(buf.length, Math.round(seconds * buf.sampleRate));
-    const out = new AudioBuffer({ length, numberOfChannels: buf.numberOfChannels, sampleRate: buf.sampleRate });
-    const fade = Math.min(length, Math.round(1.5 * buf.sampleRate));
-    for (let ch = 0; ch < buf.numberOfChannels; ch++) {
-      const data = buf.getChannelData(ch).slice(0, length);
-      // Fade out over the last 1.5 s so the music does not cut off abruptly.
-      for (let i = 0; i < fade; i++) data[length - 1 - i] *= i / fade;
-      out.copyToChannel(data, ch);
+const RATE = 48000;
+
+/** Mix clip sound (at its place in the video) and background music into one buffer. */
+async function mixAudio(
+  seconds: number,
+  music: File | null,
+  clips: { file: File; start: number; length: number }[],
+): Promise<AudioBuffer> {
+  const ctx = new OfflineAudioContext(2, Math.max(1, Math.ceil(seconds * RATE)), RATE);
+  for (const clip of clips) {
+    for (const chunk of await decodeVideoAudio(clip.file)) {
+      if (chunk.at >= clip.length) break;
+      const src = ctx.createBufferSource();
+      src.buffer = chunk.buffer;
+      src.connect(ctx.destination);
+      const offset = Math.max(0, -chunk.at);
+      src.start(clip.start + Math.max(0, chunk.at), offset, Math.max(0, clip.length - chunk.at - offset));
     }
-    return out;
-  } finally {
-    void ctx.close();
   }
+  if (music) {
+    const buf = await ctx.decodeAudioData(await music.arrayBuffer());
+    const gain = ctx.createGain();
+    // Quieter music when clips have their own sound; fade out over the last 1.5 s.
+    const volume = clips.length ? 0.5 : 1;
+    const fadeAt = Math.max(0, seconds - 1.5);
+    gain.gain.setValueAtTime(volume, 0);
+    gain.gain.setValueAtTime(volume, fadeAt);
+    gain.gain.linearRampToValueAtTime(0, seconds);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(gain).connect(ctx.destination);
+    src.start(0);
+  }
+  return ctx.startRendering();
 }
 
 export async function renderInBrowser(
@@ -94,7 +117,10 @@ export async function renderInBrowser(
   onProgress: (p: Progress) => void,
   signal: AbortSignal,
 ): Promise<RenderResult> {
-  if (!(await browserCanRender(opts, !!audio))) throw new BrowserUnsupported("WebCodecs encoder not available");
+  const clipSound = opts.video_audio && items.some((i) => i.kind === "video" && i.hasAudio);
+  if (!(await browserCanRender(opts, !!audio || clipSound))) {
+    throw new BrowserUnsupported("WebCodecs encoder not available");
+  }
   const codecs = codecsFor(opts.format);
   const { width, height } = even(opts);
 
@@ -119,8 +145,8 @@ export async function renderInBrowser(
   const video = new CanvasSource(out, { codec: codecs.video, quality: QUALITY[opts.quality], keyFrameInterval: 2 });
   output.addVideoTrack(video, { frameRate: opts.fps });
   let audioSource: AudioBufferSource | null = null;
-  if (audio) {
-    audioSource = new AudioBufferSource({ codec: codecs.audio, quality: QUALITY.high });
+  if (audio || clipSound) {
+    audioSource = new AudioBufferSource({ codec: (await pickAudioCodec(opts.format))!, quality: QUALITY.high });
     output.addAudioTrack(audioSource);
   }
   await output.start();
@@ -130,14 +156,16 @@ export async function renderInBrowser(
   let t = 0;
   let hasPrev = false;
   const skipped: string[] = [];
+  const clips: { file: File; start: number; length: number }[] = [];
 
   try {
     for (let i = 0; i < items.length; i++) {
       if (signal.aborted) throw new DOMException("cancelled", "AbortError");
       onProgress({ stage: "render", value: i / items.length, label: items[i].file.name });
       let first = true;
+      let clipStart = 0;
       try {
-        for await (const frame of decodeFrames(items[i].file, opts.animate)) {
+        for await (const frame of decodeFrames(items[i].file, opts.animate, opts.fps)) {
           draw(wctx, frame, opts);
           frame.close();
           if (first && hasPrev && transFrames) {
@@ -151,10 +179,12 @@ export async function renderInBrowser(
             }
             octx.globalAlpha = 1;
           }
+          if (first) clipStart = t;
           first = false;
           octx.drawImage(work, 0, 0);
           // A still image is a single long frame: fast to encode, same result.
-          const d = frame.duration ?? Math.max(frameDur, Math.round(opts.duration * opts.fps) / opts.fps);
+          // Whole output frames, same as the server, so the length matches the estimate.
+          const d = Math.max(1, Math.round((frame.duration ?? opts.duration) * opts.fps)) / opts.fps;
           await video.add(t, d);
           t += d;
           pctx.drawImage(work, 0, 0);
@@ -164,11 +194,15 @@ export async function renderInBrowser(
         if ((e as Error).name === "AbortError") throw e;
         skipped.push(`${items[i].file.name}: ${(e as Error).message}`);
       }
+      if (!first && clipSound && items[i].kind === "video" && items[i].hasAudio) {
+        clips.push({ file: items[i].file, start: clipStart, length: t - clipStart });
+      }
     }
     if (t === 0) throw new Error("no image could be decoded");
     video.close();
-    if (audio && audioSource) {
-      await audioSource.add(await loadAudio(audio, t));
+    if (audioSource) {
+      onProgress({ stage: "render", value: 0.99, label: "audio" });
+      await audioSource.add(await mixAudio(t, audio, clips));
       audioSource.close();
     }
     await output.finalize();

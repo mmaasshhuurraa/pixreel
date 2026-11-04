@@ -3,6 +3,7 @@ import { formatDuration } from "./engine/duration";
 import { audioDuration, type MusicTransition } from "./engine/playlist";
 import type { RenderOptions, Track } from "./engine/types";
 import { t } from "./i18n";
+import Volume from "./Volume";
 
 const AUDIO_ACCEPT = "audio/*,.mp3,.m4a,.aac,.wav,.ogg,.oga,.opus,.flac";
 
@@ -109,6 +110,7 @@ export default function Music({ tracks, setTracks, opts, set, musicSeconds, vide
       )}
       {tracks.length > 0 && (
         <>
+          <Volume label={t.musicVolume} value={opts.music_volume} onChange={(v) => set("music_volume", v)} />
           <label className="inline">
             <input type="checkbox" checked={opts.music_loop} onChange={(e) => set("music_loop", e.target.checked)} />
             {t.musicLoop}

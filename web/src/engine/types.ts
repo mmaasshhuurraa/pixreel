@@ -34,6 +34,8 @@ export interface RenderOptions {
   music_transition: MusicTransition;
   music_transition_duration: number;
   music_loop: boolean;
+  music_volume: number; // 0..2
+  video_volume: number; // 0..2
 }
 
 export const defaultOptions: RenderOptions = {
@@ -52,6 +54,8 @@ export const defaultOptions: RenderOptions = {
   music_transition: "crossfade",
   music_transition_duration: 2,
   music_loop: false,
+  music_volume: 1,
+  video_volume: 1,
 };
 
 export interface Track {

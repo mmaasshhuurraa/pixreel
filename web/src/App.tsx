@@ -6,6 +6,7 @@ import { sortDate } from "./engine/metadata";
 import { TRANSITIONS } from "./engine/transitions";
 import { totalLength } from "./engine/playlist";
 import Music from "./Music";
+import Volume from "./Volume";
 import { BrowserUnsupported, browserCanRender, renderInBrowser } from "./engine/browser";
 // setApiUrl is used by the hidden "Where to convert" block below.
 import { checkServer, getApiUrl, renderOnServer /*, setApiUrl */ } from "./engine/server";
@@ -392,6 +393,9 @@ export default function App() {
               <input type="checkbox" checked={opts.video_audio} onChange={(e) => set("video_audio", e.target.checked)} />
               {t.videoAudio}
             </label>
+          )}
+          {hasVideo && opts.format !== "gif" && opts.video_audio && (
+            <Volume label={t.videoVolume} value={opts.video_volume} onChange={(v) => set("video_volume", v)} />
           )}
           {opts.format !== "gif" && (
             <Music

@@ -122,6 +122,8 @@ def options_form(
     ] = "none",
     music_transition_duration: Annotated[float, Form(ge=0, le=30)] = 2.0,
     music_loop: Annotated[bool, Form(description="Repeat the music if it is shorter than the video")] = False,
+    music_volume: Annotated[float, Form(ge=0, le=2, description="1 = original volume")] = 1.0,
+    video_volume: Annotated[float, Form(ge=0, le=2, description="Volume of video clip sound, 1 = original")] = 1.0,
 ) -> RenderOptions:
     return RenderOptions(
         width=width, height=height, fps=fps, duration=duration, fit=fit,
@@ -129,7 +131,7 @@ def options_form(
         transition_duration=transition_duration, format=format,
         quality=quality, animate=animate, video_audio=video_audio,
         music_transition=music_transition, music_transition_duration=music_transition_duration,
-        music_loop=music_loop,
+        music_loop=music_loop, music_volume=music_volume, video_volume=video_volume,
     )
 
 

@@ -95,7 +95,8 @@ input[type="number"], input[type="url"], select {
 }
 input[type="color"] { width: 40px; height: 28px; border: 0; padding: 0; background: none; }
 input[type="file"] { font-size: 13px; color: var(--muted); }
-fieldset { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+/* min-width: 0 stops long file names from stretching the box past the panel. */
+fieldset { min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
 legend { font-size: 13px; color: var(--muted); padding: 0 4px; }
 .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { flex: 1; border: 0; padding: 6px; background: transparent; cursor: pointer; font-size: 13px; }
@@ -141,3 +142,7 @@ button.icon:disabled { opacity: .35; cursor: default; }
 .summary { margin: 0; font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; }
 .summary .hint { flex-basis: 100%; }
 .summary.short b { color: var(--err); }
+
+.volume { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; font-size: 13px; color: var(--muted); }
+.volume input[type="range"] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); margin: 0; }
+.volume output { font-variant-numeric: tabular-nums; color: var(--text); }

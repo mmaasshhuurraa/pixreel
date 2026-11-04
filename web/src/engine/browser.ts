@@ -157,12 +157,15 @@ async function mixAudio(
   opts: RenderOptions,
 ): Promise<AudioBuffer> {
   const ctx = new OfflineAudioContext(2, Math.max(1, Math.ceil(seconds * RATE)), RATE);
+  const clipGain = ctx.createGain();
+  clipGain.gain.value = opts.video_volume;
+  clipGain.connect(ctx.destination);
   for (const clip of clips) {
     for (const chunk of await decodeVideoAudio(clip.file)) {
       if (chunk.at >= clip.length) break;
       const src = ctx.createBufferSource();
       src.buffer = chunk.buffer;
-      src.connect(ctx.destination);
+      src.connect(clipGain);
       const offset = Math.max(0, -chunk.at);
       src.start(clip.start + Math.max(0, chunk.at), offset, Math.max(0, clip.length - chunk.at - offset));
     }
@@ -177,9 +180,9 @@ async function mixAudio(
       opts.music_loop ? seconds : undefined,
     ).filter((p) => p.start < seconds);
 
-    // Master: quieter when clips have their own sound, fade out over the last 1.5 s.
+    // Master: music volume, fade out over the last 1.5 s.
     const master = ctx.createGain();
-    const volume = clips.length ? 0.5 : 1;
+    const volume = opts.music_volume;
     const fadeAt = Math.max(0, seconds - 1.5);
     master.gain.setValueAtTime(volume, 0);
     master.gain.setValueAtTime(volume, fadeAt);

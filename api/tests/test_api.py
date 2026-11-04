@@ -296,3 +296,34 @@ def test_music_playlist(samples, tmp_path, mode, dur, loop, silences):
     assert len(spans) == len(silences), spans
     for (a, b), (ea, eb) in zip(spans, silences):
         assert abs(a - ea) < 0.25 and abs(b - eb) < 0.25, spans
+
+
+def _mean_volume(data: bytes, tmp_path: Path) -> float:
+    p = tmp_path / "v.mp4"
+    p.write_bytes(data)
+    out = subprocess.run(["ffmpeg", "-i", str(p), "-af", "volumedetect", "-f", "null", "-"],
+                         capture_output=True, text=True).stderr
+    import re
+    return float(re.search(r"mean_volume: (-?[\d.]+) dB", out).group(1))
+
+
+def test_volumes(samples, clips, tmp_path):
+    wav = tmp_path / "m.wav"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=f=330:d=10", str(wav)], check=True)
+
+    def render(**data):
+        files = [("files", ("photo.jpg", samples["photo.jpg"].read_bytes())), ("audio", ("m.wav", wav.read_bytes()))]
+        r = client.post("/v1/convert", files=files, data={"width": "160", "height": "90", "fps": "10", "duration": "4", **data})
+        assert r.status_code == 200, r.text
+        return _mean_volume(r.content, tmp_path)
+
+    full, half = render(), render(music_volume="0.5")
+    assert abs((full - half) - 6) < 1  # half volume is about -6 dB
+
+    files = [("files", ("clip.mp4", clips["clip.mp4"].read_bytes()))]
+    def clip(v):
+        r = client.post("/v1/convert", files=files, data={"width": "160", "height": "90", "fps": "10",
+                                                          "video_audio": "true", "video_volume": v})
+        assert r.status_code == 200, r.text
+        return _mean_volume(r.content, tmp_path)
+    assert abs((clip("1") - clip("0.25")) - 12) < 1.5

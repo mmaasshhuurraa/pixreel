@@ -487,6 +487,22 @@
             "title": "Music Loop",
             "description": "Repeat the music if it is shorter than the video",
             "default": false
+          },
+          "music_volume": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Music Volume",
+            "description": "1 = original volume",
+            "default": 1.0
+          },
+          "video_volume": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Video Volume",
+            "description": "Volume of video clip sound, 1 = original",
+            "default": 1.0
           }
         },
         "type": "object",
@@ -649,6 +665,22 @@
             "title": "Music Loop",
             "description": "Repeat the music if it is shorter than the video",
             "default": false
+          },
+          "music_volume": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Music Volume",
+            "description": "1 = original volume",
+            "default": 1.0
+          },
+          "video_volume": {
+            "type": "number",
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Video Volume",
+            "description": "Volume of video clip sound, 1 = original",
+            "default": 1.0
           }
         },
         "type": "object",

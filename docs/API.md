@@ -24,6 +24,8 @@ For small jobs there is a one-shot shortcut: `POST /v1/convert` takes the same f
 | `music_transition` | `none` \| `crossfade` \| `gap` | `none` | between tracks: back to back, overlap with fades, or silence |
 | `music_transition_duration` | 0 to 30 s | 2 | overlap or pause length; an overlap is at most half of the shorter track |
 | `music_loop` | bool | false | start the track list again if it ends before the video |
+| `music_volume` | 0 to 2 | 1 | music volume, 1 = original, 0.5 = half, 2 = double |
+| `video_volume` | 0 to 2 | 1 | volume of the sound of video clips (with `video_audio`) |
 | `sort` | `none` \| `name` \| `name_desc` | `none` | sort files by file name, A→Z or Z→A |
 | `width`, `height` | 16 to 3840 | 1920 × 1080 | rounded down to even numbers |
 | `fps` | 1 to 60 | 30 | |

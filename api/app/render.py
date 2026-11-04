@@ -52,6 +52,8 @@ class RenderOptions:
     music_transition: str = "none"  # none | crossfade | gap, between music tracks
     music_transition_duration: float = 2.0
     music_loop: bool = False  # repeat the music list if it is shorter than the video
+    music_volume: float = 1.0  # 0..2, 1 = unchanged
+    video_volume: float = 1.0  # 0..2, sound of video clips
     max_side: int = 4096
 
     def validate(self) -> None:
@@ -73,6 +75,8 @@ class RenderOptions:
             raise ValueError("quality must be low, medium or high")
         if self.music_transition not in MUSIC_TRANSITIONS:
             raise ValueError("music_transition must be one of: " + ", ".join(MUSIC_TRANSITIONS))
+        if not (0 <= self.music_volume <= 2 and 0 <= self.video_volume <= 2):
+            raise ValueError("music_volume and video_volume must be between 0 and 2")
         if not (0 <= self.music_transition_duration <= 30):
             raise ValueError("music_transition_duration must be between 0 and 30 seconds")
         ImageColor.getrgb(self.background)
@@ -197,7 +201,7 @@ def _mux_audio(
         k = len(labels)
         filters.append(
             f"[{k + 1}:a:0]atrim=0:{dur:.3f},asetpts=PTS-STARTPTS,{norm},"
-            f"adelay={int(start * 1000)}:all=1[a{k}]"
+            f"volume={opts.video_volume},adelay={int(start * 1000)}:all=1[a{k}]"
         )
         labels.append(f"[a{k}]")
 
@@ -205,8 +209,6 @@ def _mux_audio(
     placed = plan(durations, opts.music_transition, opts.music_transition_duration,
                   loop=opts.music_loop, until=total)
     placed = [p for p in placed if p.start < total]
-    # Quieter music when clips have their own sound.
-    volume = 0.5 if clips else 1.0
     music_labels = []
     for p in placed:
         cmd += ["-i", str(music[p.index])]
@@ -223,7 +225,7 @@ def _mux_audio(
         # Mix the tracks, then fade the whole music out at the end of the video.
         filters.append(
             f"{''.join(music_labels)}amix=inputs={len(music_labels)}:normalize=0:duration=longest,"
-            f"volume={volume},atrim=0:{total:.3f},afade=t=out:st={max(0.0, total - 1.5):.3f}:d=1.5[music]"
+            f"volume={opts.music_volume},atrim=0:{total:.3f},afade=t=out:st={max(0.0, total - 1.5):.3f}:d=1.5[music]"
         )
         labels.append("[music]")
     if not labels:

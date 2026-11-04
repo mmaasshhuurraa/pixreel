@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { makeThumb } from "./engine/decode";
 import { BrowserUnsupported, browserCanRender, renderInBrowser } from "./engine/browser";
-import { checkServer, getApiUrl, renderOnServer, setApiUrl } from "./engine/server";
+// setApiUrl is used by the hidden "Where to convert" block below.
+import { checkServer, getApiUrl, renderOnServer /*, setApiUrl */ } from "./engine/server";
 import { defaultOptions, type EngineChoice, type Item, type Progress, type RenderOptions, type RenderResult } from "./engine/types";
 import { t } from "./i18n";
 
@@ -23,8 +24,9 @@ export default function App() {
   const [items, setItems] = useState<Item[]>([]);
   const [opts, setOpts] = useState<RenderOptions>(defaultOptions);
   const [audio, setAudio] = useState<File | null>(null);
-  const [engine, setEngine] = useState<EngineChoice>("auto");
-  const [apiUrl, setApiUrlState] = useState(getApiUrl());
+  // Setters are used by the hidden "Where to convert" block below.
+  const [engine /*, setEngine */] = useState<EngineChoice>("auto");
+  const [apiUrl /*, setApiUrlState */] = useState(getApiUrl());
   const [serverOk, setServerOk] = useState<boolean | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [result, setResult] = useState<(RenderResult & { url: string }) | null>(null);
@@ -328,6 +330,7 @@ export default function App() {
             </label>
           )}
 
+          {/* TODO: "Where to convert" block is hidden for now; engine stays "auto".
           <fieldset>
             <legend>{t.engine}</legend>
             <div className="seg">
@@ -363,7 +366,7 @@ export default function App() {
                 )}
               </small>
             )}
-          </fieldset>
+          </fieldset> */}
 
           {busy ? (
             <div className="progress">

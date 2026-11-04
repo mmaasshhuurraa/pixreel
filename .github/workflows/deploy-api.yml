@@ -1,0 +1,43 @@
+# Publishes api/ to a Hugging Face Space (free Docker hosting).
+# One-time setup:
+#   1. Create a token with "write" access at https://huggingface.co/settings/tokens
+#   2. Settings → Secrets and variables → Actions → Secrets → HF_TOKEN
+#   3. Variables → HF_SPACE = <hf-user>/pixreel-api
+# The Space is created automatically on the first run.
+name: Deploy API
+
+on:
+  push:
+    branches: [main]
+    paths: ["api/**", ".github/workflows/deploy-api.yml"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: vars.HF_SPACE != ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install huggingface_hub
+      - name: Upload to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ vars.HF_SPACE }}
+        run: |
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          space = os.environ["HF_SPACE"]
+          api.create_repo(space, repo_type="space", space_sdk="docker", exist_ok=True)
+          api.upload_folder(
+              repo_id=space, repo_type="space", folder_path="api",
+              ignore_patterns=["tests/*", "**/__pycache__/*", ".pytest_cache/*"],
+              commit_message=f"Deploy {os.environ['GITHUB_SHA'][:7]}",
+              delete_patterns=["app/*"],
+          )
+          print(f"https://{space.replace('/', '-').lower()}.hf.space")
+          PY

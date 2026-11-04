@@ -110,6 +110,7 @@ legend { font-size: 13px; color: var(--muted); padding: 0 4px; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn.ghost { background: transparent; }
 button.link { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0 0 0 12px; }
+button.link.active { font-weight: 700; }
 
 .progress { display: flex; flex-direction: column; gap: 6px; }
 .bar { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }

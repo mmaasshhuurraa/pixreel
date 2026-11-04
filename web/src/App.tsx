@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { kindOf, probe } from "./engine/decode";
 import { formatDuration, itemEstimate, totalEstimate } from "./engine/duration";
 import { ACCEPT, isAccepted } from "./formats";
+import { sortDate } from "./engine/metadata";
+import { TRANSITIONS } from "./engine/transitions";
 import { BrowserUnsupported, browserCanRender, renderInBrowser } from "./engine/browser";
 // setApiUrl is used by the hidden "Where to convert" block below.
 import { checkServer, getApiUrl, renderOnServer /*, setApiUrl */ } from "./engine/server";
-import { defaultOptions, type EngineChoice, type Item, type Progress, type RenderOptions, type RenderResult } from "./engine/types";
+import { defaultOptions, type EngineChoice, type Item, type OutFormat, type Progress, type RenderOptions, type RenderResult } from "./engine/types";
 import { t } from "./i18n";
 
 const PRESETS = [
@@ -27,10 +29,12 @@ export default function App() {
   const [apiUrl /*, setApiUrlState */] = useState(getApiUrl());
   const [serverOk, setServerOk] = useState<boolean | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
-  const [result, setResult] = useState<(RenderResult & { url: string }) | null>(null);
+  const [result, setResult] = useState<(RenderResult & { url: string; format: OutFormat }) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [rejected, setRejected] = useState<string[]>([]);
+  /** Last sort applied; cleared when the order is changed by hand. */
+  const [sortBy, setSortBy] = useState<{ key: "name" | "date"; desc: boolean } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const dragIndex = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -51,13 +55,25 @@ export default function App() {
       id: String(nextId++), file, kind: kindOf(file), thumb: null, browserOk: null,
     }));
     setItems((prev) => [...prev, ...fresh]);
+    setSortBy(null);
     for (const it of fresh) {
       const info = await probe(it.file);
       setItems((prev) => prev.map((p) => (p.id === it.id ? { ...p, ...info } : p)));
     }
   }
 
+  function sortItems(key: "name" | "date") {
+    const desc = sortBy?.key === key && !sortBy.desc;
+    const cmp =
+      key === "name"
+        ? (a: Item, b: Item) => a.file.name.localeCompare(b.file.name, undefined, { numeric: true, sensitivity: "base" })
+        : (a: Item, b: Item) => sortDate(a) - sortDate(b);
+    setItems((p) => [...p].sort((a, b) => (desc ? -cmp(a, b) : cmp(a, b))));
+    setSortBy({ key, desc });
+  }
+
   function move(from: number, to: number) {
+    setSortBy(null);
     setItems((prev) => {
       const next = [...prev];
       const [x] = next.splice(from, 1);
@@ -84,7 +100,7 @@ export default function App() {
       if (engine === "auto") {
         useBrowser = !needsServer && (await browserCanRender(opts, !!audio));
         if (!useBrowser && !serverOk) {
-          useBrowser = !needsServer && opts.format !== "gif";
+          useBrowser = !needsServer;
           if (!useBrowser) throw new Error(t.needServer);
         }
       }
@@ -101,7 +117,7 @@ export default function App() {
           throw new Error(t.browserCannot);
         } else throw e;
       }
-      setResult({ ...res, url: URL.createObjectURL(res.blob) });
+      setResult({ ...res, url: URL.createObjectURL(res.blob), format: opts.format });
     } catch (e) {
       if ((e as Error).name !== "AbortError") setError((e as Error).message);
     } finally {
@@ -168,14 +184,17 @@ export default function App() {
                   {t.files}: {items.length} · {t.estimate} <b>{totalLabel}</b>
                 </span>
                 <span>
-                  <button
-                    className="link"
-                    onClick={() =>
-                      setItems((p) => [...p].sort((a, b) => a.file.name.localeCompare(b.file.name, undefined, { numeric: true })))
-                    }
-                  >
-                    {t.sortName}
-                  </button>
+                  {(["name", "date"] as const).map((key) => (
+                    <button
+                      key={key}
+                      className={`link ${sortBy?.key === key ? "active" : ""}`}
+                      title={t.sortHint}
+                      onClick={() => sortItems(key)}
+                    >
+                      {key === "name" ? t.sortName : t.sortDate}
+                      {sortBy?.key === key && (sortBy.desc ? " ↓" : " ↑")}
+                    </button>
+                  ))}
                   <button className="link" onClick={() => setItems([])}>
                     {t.clear}
                   </button>
@@ -227,13 +246,15 @@ export default function App() {
           {result && (
             <div className="result">
               <h2>{t.result}</h2>
-              {opts.format === "gif" || result.blob.type === "image/gif" ? (
+              {result.format === "gif" ? (
                 <img src={result.url} alt="" />
+              ) : result.format === "avi" || result.format === "wmv" ? (
+                <p className="muted">{t.noPreview}</p>
               ) : (
                 <video src={result.url} controls playsInline />
               )}
               <div className="row">
-                <a className="btn" href={result.url} download={`pixreel.${result.blob.type.split("/")[1]}`}>
+                <a className="btn" href={result.url} download={`pixreel.${result.format}`}>
                   {t.save} ({(result.blob.size / 1048576).toFixed(1)} MB)
                 </a>
                 <span className="muted">
@@ -302,11 +323,16 @@ export default function App() {
             <label>
               {t.transition}
               <select value={opts.transition} onChange={(e) => set("transition", e.target.value as RenderOptions["transition"])}>
-                <option value="crossfade">{t.crossfade}</option>
                 <option value="none">{t.none}</option>
+                <option value="random">{t.random}</option>
+                {TRANSITIONS.map((name) => (
+                  <option key={name} value={name}>
+                    {t.effects[name]}
+                  </option>
+                ))}
               </select>
             </label>
-            {opts.transition === "crossfade" && (
+            {opts.transition !== "none" && (
               <label>
                 {t.transitionDuration}
                 <input
@@ -325,9 +351,12 @@ export default function App() {
               {t.format}
               <select value={opts.format} onChange={(e) => set("format", e.target.value as RenderOptions["format"])}>
                 <option value="mp4">MP4 (H.264)</option>
+                <option value="mov">MOV (H.264)</option>
                 <option value="webm">WebM (VP9)</option>
-                {/* GIF needs the server (api/), which is not connected yet. */}
-                {/* <option value="gif">GIF</option> */}
+                <option value="mkv">MKV (H.264)</option>
+                <option value="avi">AVI (MPEG-4)</option>
+                <option value="wmv">WMV (Windows Media)</option>
+                <option value="gif">GIF</option>
               </select>
             </label>
             <label>
@@ -339,10 +368,12 @@ export default function App() {
               </select>
             </label>
           </div>
+          {/* Hidden for now; animations play by default (opts.animate = true).
           <label className="inline">
             <input type="checkbox" checked={opts.animate} onChange={(e) => set("animate", e.target.checked)} />
             {t.animate}
           </label>
+          */}
           {hasVideo && opts.format !== "gif" && (
             <label className="inline">
               <input type="checkbox" checked={opts.video_audio} onChange={(e) => set("video_audio", e.target.checked)} />

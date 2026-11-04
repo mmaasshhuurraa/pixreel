@@ -12,13 +12,26 @@ from PIL import Image, ImageColor, ImageFilter
 
 from .config import settings
 from .decoders import is_video, load_frames, probe_video
+from .transitions import TRANSITIONS, blend, picker
 
 Fit = Literal["contain", "cover", "blur"]
-Transition = Literal["none", "crossfade"]
-OutFormat = Literal["mp4", "webm", "gif"]
+Transition = str  # "none", "random" or one of transitions.TRANSITIONS
+OutFormat = Literal["mp4", "mov", "webm", "mkv", "avi", "wmv", "gif"]
+FORMATS = ("mp4", "mov", "webm", "mkv", "avi", "wmv", "gif")
 
 QUALITY_CRF = {"low": 30, "medium": 25, "high": 20}
 VP9_CRF = {"low": 40, "medium": 34, "high": 28}
+MPEG4_Q = {"low": 8, "medium": 5, "high": 3}
+WMV_BPP = {"low": 0.05, "medium": 0.1, "high": 0.18}  # bits per pixel per frame
+
+AUDIO_CODEC = {
+    "mp4": ["-c:a", "aac", "-b:a", "192k"],
+    "mov": ["-c:a", "aac", "-b:a", "192k"],
+    "mkv": ["-c:a", "aac", "-b:a", "192k"],
+    "webm": ["-c:a", "libopus", "-b:a", "128k"],
+    "avi": ["-c:a", "libmp3lame", "-b:a", "192k"],
+    "wmv": ["-c:a", "wmav2", "-b:a", "192k"],
+}
 
 
 @dataclass
@@ -48,10 +61,10 @@ class RenderOptions:
             raise ValueError("transition_duration must be between 0 and 5 seconds")
         if self.fit not in ("contain", "cover", "blur"):
             raise ValueError("fit must be contain, cover or blur")
-        if self.transition not in ("none", "crossfade"):
-            raise ValueError("transition must be none or crossfade")
-        if self.format not in ("mp4", "webm", "gif"):
-            raise ValueError("format must be mp4, webm or gif")
+        if self.transition not in ("none", "random", *TRANSITIONS):
+            raise ValueError("transition must be none, random or one of: " + ", ".join(TRANSITIONS))
+        if self.format not in FORMATS:
+            raise ValueError("format must be one of: " + ", ".join(FORMATS))
         if self.quality not in QUALITY_CRF:
             raise ValueError("quality must be low, medium or high")
         ImageColor.getrgb(self.background)
@@ -97,11 +110,18 @@ def _encode_cmd(opts: RenderOptions, out: Path) -> list[str]:
         "-f", "rawvideo", "-pix_fmt", "rgb24",
         "-s", f"{opts.width}x{opts.height}", "-r", str(opts.fps), "-i", "-",
     ]
-    if opts.format == "mp4":
+    if opts.format in ("mp4", "mov", "mkv"):
         cmd += [
             "-c:v", "libx264", "-preset", "veryfast", "-crf", str(QUALITY_CRF[opts.quality]),
-            "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+            "-pix_fmt", "yuv420p",
         ]
+        if opts.format != "mkv":
+            cmd += ["-movflags", "+faststart"]
+    elif opts.format == "avi":
+        cmd += ["-c:v", "mpeg4", "-vtag", "xvid", "-q:v", str(MPEG4_Q[opts.quality]), "-pix_fmt", "yuv420p"]
+    elif opts.format == "wmv":
+        bitrate = round(opts.width * opts.height * opts.fps * WMV_BPP[opts.quality])
+        cmd += ["-c:v", "wmv2", "-b:v", str(bitrate), "-pix_fmt", "yuv420p"]
     elif opts.format == "webm":
         cmd += [
             "-c:v", "libvpx-vp9", "-crf", str(VP9_CRF[opts.quality]), "-b:v", "0",
@@ -181,12 +201,12 @@ def _mux_audio(
         labels.append("[m]")
     filters.append(f"{''.join(labels)}amix=inputs={len(labels)}:normalize=0:duration=longest,"
                    f"apad,atrim=0:{total:.3f}[aout]")
-    acodec = ["-c:a", "aac", "-b:a", "192k"] if opts.format == "mp4" else ["-c:a", "libopus", "-b:a", "128k"]
+    acodec = AUDIO_CODEC[opts.format]
     cmd += [
         "-filter_complex", ";".join(filters), "-map", "0:v", "-map", "[aout]",
         "-c:v", "copy", *acodec, "-t", f"{total:.3f}",
     ]
-    if opts.format == "mp4":
+    if opts.format in ("mp4", "mov"):
         cmd += ["-movflags", "+faststart"]
     cmd.append(str(out))
     proc = subprocess.run(cmd, capture_output=True, timeout=1800)
@@ -204,7 +224,8 @@ def render_video(
     """Decode every image and clip, compose frames and encode them into `out`."""
     opts.validate()
     hold = max(1, round(opts.duration * opts.fps))
-    trans = round(opts.transition_duration * opts.fps) if opts.transition == "crossfade" else 0
+    trans = round(opts.transition_duration * opts.fps) if opts.transition != "none" else 0
+    next_effect = picker(opts.transition)
     max_frames = settings.max_seconds * opts.fps
 
     silent = out.with_name(f"silent{out.suffix}")
@@ -243,9 +264,9 @@ def render_video(
                 for frame, count in frames_of(path):
                     if start is None:
                         if prev is not None and trans:
+                            effect = next_effect()
                             for k in range(1, trans + 1):
-                                a = k / (trans + 1)
-                                write((prev * (1 - a) + frame * a).astype(np.uint8))
+                                write(blend(effect, prev, frame, k / (trans + 1)))
                         start = frames_written
                     write(frame, count)
                     prev = frame

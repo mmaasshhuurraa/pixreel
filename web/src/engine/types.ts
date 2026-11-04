@@ -1,7 +1,18 @@
 import type { Kind, Probe } from "./decode";
+import type { TransitionChoice } from "./transitions";
 
 export type Fit = "contain" | "cover" | "blur";
-export type OutFormat = "mp4" | "webm" | "gif";
+export type OutFormat = "mp4" | "mov" | "webm" | "mkv" | "avi" | "wmv" | "gif";
+
+export const MIME: Record<OutFormat, string> = {
+  mp4: "video/mp4",
+  mov: "video/quicktime",
+  webm: "video/webm",
+  mkv: "video/x-matroska",
+  avi: "video/x-msvideo",
+  wmv: "video/x-ms-wmv",
+  gif: "image/gif",
+};
 export type Quality = "low" | "medium" | "high";
 export type EngineChoice = "auto" | "browser" | "server";
 
@@ -13,7 +24,7 @@ export interface RenderOptions {
   duration: number;
   fit: Fit;
   background: string;
-  transition: "none" | "crossfade";
+  transition: TransitionChoice;
   transition_duration: number;
   format: OutFormat;
   quality: Quality;

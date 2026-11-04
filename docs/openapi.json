@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "PixReel API",
-    "description": "Convert images (and video clips) in almost any format (JPEG, PNG, WebP, HEIC, AVIF, JXL, RAW, PSD, TIFF, SVG, PDF, GIF...) into a single MP4, WebM or GIF video.",
+    "description": "Convert images (and video clips) in almost any format (JPEG, PNG, WebP, HEIC, AVIF, JXL, RAW, PSD, TIFF, SVG, PDF, GIF...) into a single MP4, MOV, WebM, MKV, AVI, WMV or GIF video.",
     "version": "0.1.0"
   },
   "paths": {
@@ -361,7 +361,8 @@
             "type": "string",
             "enum": [
               "none",
-              "name"
+              "name",
+              "name_desc"
             ],
             "title": "Sort",
             "default": "none"
@@ -413,11 +414,8 @@
           },
           "transition": {
             "type": "string",
-            "enum": [
-              "none",
-              "crossfade"
-            ],
             "title": "Transition",
+            "description": "none, random, crossfade, fadeblack, fadewhite, slideleft, slideright, slideup, slidedown, wipeleft, wiperight, wipeup, wipedown, zoom, circle",
             "default": "none"
           },
           "transition_duration": {
@@ -431,7 +429,11 @@
             "type": "string",
             "enum": [
               "mp4",
+              "mov",
               "webm",
+              "mkv",
+              "avi",
+              "wmv",
               "gif"
             ],
             "title": "Format",
@@ -494,7 +496,8 @@
             "type": "string",
             "enum": [
               "none",
-              "name"
+              "name",
+              "name_desc"
             ],
             "title": "Sort",
             "default": "none"
@@ -546,11 +549,8 @@
           },
           "transition": {
             "type": "string",
-            "enum": [
-              "none",
-              "crossfade"
-            ],
             "title": "Transition",
+            "description": "none, random, crossfade, fadeblack, fadewhite, slideleft, slideright, slideup, slidedown, wipeleft, wiperight, wipeup, wipedown, zoom, circle",
             "default": "none"
           },
           "transition_duration": {
@@ -564,7 +564,11 @@
             "type": "string",
             "enum": [
               "mp4",
+              "mov",
               "webm",
+              "mkv",
+              "avi",
+              "wmv",
               "gif"
             ],
             "title": "Format",

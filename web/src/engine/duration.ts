@@ -32,7 +32,7 @@ export function totalEstimate(items: Item[], o: RenderOptions): Estimate {
     seconds += e.seconds;
     exact &&= e.exact;
   }
-  if (o.transition === "crossfade" && items.length > 1) {
+  if (o.transition !== "none" && items.length > 1) {
     seconds += (items.length - 1) * (Math.round(o.transition_duration * o.fps) / o.fps);
   }
   return { seconds, exact };

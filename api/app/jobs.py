@@ -14,7 +14,15 @@ from pathlib import Path
 from .config import settings
 from .render import RenderOptions, render_video
 
-MEDIA_TYPES = {"mp4": "video/mp4", "webm": "video/webm", "gif": "image/gif"}
+MEDIA_TYPES = {
+    "mp4": "video/mp4",
+    "mov": "video/quicktime",
+    "webm": "video/webm",
+    "mkv": "video/x-matroska",
+    "avi": "video/x-msvideo",
+    "wmv": "video/x-ms-wmv",
+    "gif": "image/gif",
+}
 
 
 @dataclass

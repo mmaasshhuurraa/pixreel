@@ -23,7 +23,7 @@ app = FastAPI(
     title="PixReel API",
     version=__version__,
     description="Convert images (and video clips) in almost any format (JPEG, PNG, WebP, HEIC, AVIF, JXL, "
-    "RAW, PSD, TIFF, SVG, PDF, GIF...) into a single MP4, WebM or GIF video.",
+    "RAW, PSD, TIFF, SVG, PDF, GIF...) into a single MP4, MOV, WebM, MKV, AVI, WMV or GIF video.",
 )
 app.add_middleware(
     CORSMiddleware,
@@ -67,8 +67,8 @@ async def _create_job(files: list[UploadFile], audio: UploadFile | None, opts: R
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
 
-    if sort == "name":
-        files = sorted(files, key=lambda f: (f.filename or "").lower())
+    if sort in ("name", "name_desc"):
+        files = sorted(files, key=lambda f: (f.filename or "").lower(), reverse=sort == "name_desc")
 
     job_id, d = store.new_dir()
     try:
@@ -104,9 +104,12 @@ def options_form(
     duration: Annotated[float, Form(gt=0, le=60, description="Seconds per still image")] = 2.0,
     fit: Annotated[Literal["contain", "cover", "blur"], Form()] = "contain",
     background: Annotated[str, Form(description="CSS color, e.g. #000000")] = "#000000",
-    transition: Annotated[Literal["none", "crossfade"], Form()] = "none",
+    transition: Annotated[
+        str, Form(description="none, random, crossfade, fadeblack, fadewhite, slideleft, slideright, "
+                              "slideup, slidedown, wipeleft, wiperight, wipeup, wipedown, zoom, circle")
+    ] = "none",
     transition_duration: Annotated[float, Form(ge=0, le=5)] = 0.5,
-    format: Annotated[Literal["mp4", "webm", "gif"], Form()] = "mp4",
+    format: Annotated[Literal["mp4", "mov", "webm", "mkv", "avi", "wmv", "gif"], Form()] = "mp4",
     quality: Annotated[Literal["low", "medium", "high"], Form()] = "medium",
     animate: Annotated[bool, Form(description="Play frames of animated GIF/WebP/APNG")] = True,
     video_audio: Annotated[bool, Form(description="Keep the sound of uploaded video clips")] = False,
@@ -148,7 +151,7 @@ async def create_job(
     files: Annotated[list[UploadFile], File(description="Images and video clips, in the order they should appear")],
     opts: Annotated[RenderOptions, Depends(options_form)],
     audio: Annotated[UploadFile | None, File(description="Optional background music")] = None,
-    sort: Annotated[Literal["none", "name"], Form()] = "none",
+    sort: Annotated[Literal["none", "name", "name_desc"], Form()] = "none",
 ) -> dict:
     """Start a conversion. Poll `GET /v1/jobs/{id}` until status is `done`."""
     job = await _create_job(files, audio, opts, sort)
@@ -185,7 +188,7 @@ async def convert(
     files: Annotated[list[UploadFile], File()],
     opts: Annotated[RenderOptions, Depends(options_form)],
     audio: Annotated[UploadFile | None, File()] = None,
-    sort: Annotated[Literal["none", "name"], Form()] = "none",
+    sort: Annotated[Literal["none", "name", "name_desc"], Form()] = "none",
 ) -> FileResponse:
     """Synchronous shortcut: upload and wait for the video in one request (small jobs)."""
     import asyncio

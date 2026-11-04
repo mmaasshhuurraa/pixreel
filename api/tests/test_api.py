@@ -123,7 +123,8 @@ def test_job_flow_all_formats(samples, tmp_path):
     assert client.get(f"/v1/jobs/{job_id}").status_code == 404
 
 
-@pytest.mark.parametrize("fmt,codec", [("webm", "vp9"), ("gif", "gif")])
+@pytest.mark.parametrize("fmt,codec", [("webm", "vp9"), ("gif", "gif"), ("mov", "h264"), ("mkv", "h264"),
+                                       ("avi", "mpeg4"), ("wmv", "wmv2")])
 def test_convert_sync(samples, tmp_path, fmt, codec):
     files = [("files", (n, samples[n].read_bytes())) for n in ("photo.jpg", "alpha.png")]
     r = client.post("/v1/convert", files=files, data={"width": "320", "height": "240", "fps": "5", "duration": "0.4", "format": fmt})
@@ -208,3 +209,41 @@ def test_video_audio_with_music_webm(clips, tmp_path):
     assert r.status_code == 200, r.text
     info = _probe(r.content, ".webm", tmp_path)
     assert {s["codec_name"] for s in info["streams"]} == {"vp9", "opus"}
+
+
+@pytest.mark.parametrize("effect", ["crossfade", "fadeblack", "fadewhite", "slideleft", "slideright", "slideup",
+                                    "slidedown", "wipeleft", "wiperight", "wipeup", "wipedown", "zoom", "circle", "random"])
+def test_transitions(samples, tmp_path, effect):
+    files = [("files", (n, samples[n].read_bytes())) for n in ("photo.jpg", "alpha.png", "photo.webp")]
+    r = client.post("/v1/convert", files=files, data={
+        "width": "160", "height": "90", "fps": "10", "duration": "0.5",
+        "transition": effect, "transition_duration": "0.5",
+    })
+    assert r.status_code == 200, r.text
+    # 3 × 0.5 s + 2 transitions × 0.5 s
+    assert abs(float(_probe(r.content, ".mp4", tmp_path)["format"]["duration"]) - 2.5) < 0.15
+
+
+def test_unknown_transition():
+    r = client.post("/v1/jobs", files=[("files", ("a.jpg", b"x"))], data={"transition": "spin"})
+    assert r.status_code == 422
+
+
+def test_blend_endpoints():
+    import numpy as np
+    from app.transitions import TRANSITIONS, blend
+    a = np.zeros((40, 60, 3), np.uint8)
+    b = np.full((40, 60, 3), 200, np.uint8)
+    for name in TRANSITIONS:
+        assert blend(name, a, b, 0.0001).mean() < 20, name
+        assert blend(name, a, b, 0.9999).mean() > 180, name
+
+
+@pytest.mark.parametrize("fmt,acodec", [("avi", "mp3"), ("wmv", "wmav2"), ("mov", "aac"), ("mkv", "aac")])
+def test_audio_in_other_containers(samples, tmp_path, fmt, acodec):
+    wav = tmp_path / "a.wav"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=d=5", str(wav)], check=True)
+    files = [("files", ("photo.jpg", samples["photo.jpg"].read_bytes())), ("audio", ("a.wav", wav.read_bytes()))]
+    r = client.post("/v1/convert", files=files, data={"width": "320", "height": "240", "duration": "1", "format": fmt})
+    assert r.status_code == 200, r.text
+    assert acodec in {s["codec_name"] for s in _probe(r.content, f".{fmt}", tmp_path)["streams"]}

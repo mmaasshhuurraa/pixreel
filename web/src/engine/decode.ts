@@ -1,4 +1,5 @@
 /** Image and video decoding in the browser. Anything that fails here is sent to the API. */
+import { takenAt } from "./metadata";
 import { ALL_FORMATS, AudioBufferSink, BlobSource, CanvasSink, Input } from "mediabunny";
 
 export type Drawable = ImageBitmap | HTMLImageElement | VideoFrame | HTMLCanvasElement | OffscreenCanvas;
@@ -157,6 +158,8 @@ export interface Probe {
   /** Pages of a PDF, counted roughly. */
   pages?: number;
   hasAudio?: boolean;
+  /** When it was taken (EXIF / video header), ms since epoch. */
+  takenAt?: number | null;
 }
 
 function thumbFrom(image: CanvasImageSource, w: number, h: number, size = 240): string {
@@ -215,6 +218,11 @@ function videoElementDuration(file: File): Promise<number | null> {
 }
 
 export async function probe(file: File): Promise<Probe> {
+  const [info, date] = await Promise.all([probeMedia(file), takenAt(file)]);
+  return { ...info, takenAt: date };
+}
+
+async function probeMedia(file: File): Promise<Probe> {
   if (kindOf(file) === "video") {
     const input = openVideo(file);
     try {

@@ -5,4 +5,6 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   base: process.env.BASE_PATH || "/",
   plugins: [react()],
+  // ffmpeg.wasm starts its own worker; pre-bundling breaks that in dev mode.
+  optimizeDeps: { exclude: ["@ffmpeg/ffmpeg", "@ffmpeg/util"] },
 });

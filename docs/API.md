@@ -21,18 +21,33 @@ For small jobs there is a one-shot shortcut: `POST /v1/convert` takes the same f
 |---|---|---|---|
 | `files` | file, repeated | (required) | images and video clips, in the order they should appear |
 | `audio` | file | none | mp3, m4a, aac, wav, ogg, opus, flac; trimmed to the video and faded out |
-| `sort` | `none` \| `name` | `none` | `name` sorts files by file name |
+| `sort` | `none` \| `name` \| `name_desc` | `none` | sort files by file name, A→Z or Z→A |
 | `width`, `height` | 16 to 3840 | 1920 × 1080 | rounded down to even numbers |
 | `fps` | 1 to 60 | 30 | |
 | `duration` | seconds, > 0 to 60 | 2 | how long each still image is shown. For a timelapse use `1/fps` |
 | `fit` | `contain` \| `cover` \| `blur` | `contain` | letterbox, crop to fill, or letterbox over a blurred copy |
 | `background` | CSS color | `#000000` | bars color for `contain` |
-| `transition` | `none` \| `crossfade` | `none` | |
+| `transition` | see below | `none` | effect between neighbours |
 | `transition_duration` | 0 to 5 s | 0.5 | adds this much time between images |
-| `format` | `mp4` \| `webm` \| `gif` | `mp4` | H.264 / VP9 / GIF |
+| `format` | `mp4` \| `mov` \| `webm` \| `mkv` \| `avi` \| `wmv` \| `gif` | `mp4` | see below |
 | `quality` | `low` \| `medium` \| `high` | `medium` | |
 | `animate` | bool | true | play frames of animated GIF / WebP / APNG with their own timing |
 | `video_audio` | bool | false | keep the sound of video clips (placed where each clip plays; music, if any, is mixed in at half volume) |
+
+Transitions: `none`, `random` (a different effect each time), `crossfade`, `fadeblack`, `fadewhite`,
+`slideleft`, `slideright`, `slideup`, `slidedown`, `wipeleft`, `wiperight`, `wipeup`, `wipedown`, `zoom`, `circle`.
+
+Output formats:
+
+| `format` | Video | Audio |
+|---|---|---|
+| `mp4` | H.264 | AAC |
+| `mov` | H.264 | AAC |
+| `webm` | VP9 | Opus |
+| `mkv` | H.264 | AAC |
+| `avi` | MPEG-4 Part 2 (Xvid) | MP3 |
+| `wmv` | WMV 8 | WMA 2 |
+| `gif` | GIF | none |
 
 Video clips (mp4, mov, webm, mkv, avi, wmv, flv, 3gp, mpg, ts, mts, ogv…) play at full length,
 resampled to `fps` and fitted with the same `fit` mode as images.

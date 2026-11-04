@@ -1,5 +1,6 @@
 import type { Kind, Probe } from "./decode";
 import type { TransitionChoice } from "./transitions";
+import type { MusicTransition } from "./playlist";
 
 export type Fit = "contain" | "cover" | "blur";
 export type OutFormat = "mp4" | "mov" | "webm" | "mkv" | "avi" | "wmv" | "gif";
@@ -30,6 +31,9 @@ export interface RenderOptions {
   quality: Quality;
   animate: boolean;
   video_audio: boolean;
+  music_transition: MusicTransition;
+  music_transition_duration: number;
+  music_loop: boolean;
 }
 
 export const defaultOptions: RenderOptions = {
@@ -45,7 +49,17 @@ export const defaultOptions: RenderOptions = {
   quality: "medium",
   animate: true,
   video_audio: false,
+  music_transition: "crossfade",
+  music_transition_duration: 2,
+  music_loop: false,
 };
+
+export interface Track {
+  id: string;
+  file: File;
+  /** Seconds; undefined while reading, null if unknown. */
+  duration?: number | null;
+}
 
 export interface Item extends Partial<Omit<Probe, "browserOk" | "thumb" | "kind">> {
   id: string;

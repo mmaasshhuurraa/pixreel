@@ -55,7 +55,7 @@ async def _save(upload: UploadFile, dest: Path, limit: int) -> int:
     return size
 
 
-async def _create_job(files: list[UploadFile], audio: UploadFile | None, opts: RenderOptions, sort: str) -> Job:
+async def _create_job(files: list[UploadFile], audio: list[UploadFile] | None, opts: RenderOptions, sort: str) -> Job:
     if not files:
         raise HTTPException(400, "no files uploaded")
     if len(files) > settings.max_files:
@@ -84,17 +84,20 @@ async def _create_job(files: list[UploadFile], audio: UploadFile | None, opts: R
             if total > settings.max_total_mb << 20:
                 raise HTTPException(413, f"upload is larger than {settings.max_total_mb} MB")
             inputs.append(dest)
-        audio_path = None
-        if audio and audio.filename:
-            ext = Path(audio.filename).suffix.lower()
+        audio_paths: list[Path] = []
+        for k, track in enumerate(a for a in (audio or []) if a.filename):
+            ext = Path(track.filename or "").suffix.lower()
             if ext not in AUDIO_EXTS:
-                raise HTTPException(415, f"{audio.filename}: unsupported audio format")
-            audio_path = d / f"audio{ext}"
-            await _save(audio, audio_path, limit)
+                raise HTTPException(415, f"{track.filename}: unsupported audio format")
+            dest = d / f"audio{k:02d}{ext}"
+            total += await _save(track, dest, limit)
+            if total > settings.max_total_mb << 20:
+                raise HTTPException(413, f"upload is larger than {settings.max_total_mb} MB")
+            audio_paths.append(dest)
     except BaseException:
         shutil.rmtree(d, ignore_errors=True)
         raise
-    return store.submit(Job(id=job_id, dir=d, inputs=inputs, options=opts, audio=audio_path))
+    return store.submit(Job(id=job_id, dir=d, inputs=inputs, options=opts, audio=audio_paths))
 
 
 def options_form(
@@ -113,12 +116,20 @@ def options_form(
     quality: Annotated[Literal["low", "medium", "high"], Form()] = "medium",
     animate: Annotated[bool, Form(description="Play frames of animated GIF/WebP/APNG")] = True,
     video_audio: Annotated[bool, Form(description="Keep the sound of uploaded video clips")] = False,
+    music_transition: Annotated[
+        Literal["none", "crossfade", "gap"],
+        Form(description="Between music tracks: back to back, overlap, or silence"),
+    ] = "none",
+    music_transition_duration: Annotated[float, Form(ge=0, le=30)] = 2.0,
+    music_loop: Annotated[bool, Form(description="Repeat the music if it is shorter than the video")] = False,
 ) -> RenderOptions:
     return RenderOptions(
         width=width, height=height, fps=fps, duration=duration, fit=fit,
         background=background, transition=transition,
         transition_duration=transition_duration, format=format,
         quality=quality, animate=animate, video_audio=video_audio,
+        music_transition=music_transition, music_transition_duration=music_transition_duration,
+        music_loop=music_loop,
     )
 
 
@@ -150,7 +161,7 @@ def formats() -> dict:
 async def create_job(
     files: Annotated[list[UploadFile], File(description="Images and video clips, in the order they should appear")],
     opts: Annotated[RenderOptions, Depends(options_form)],
-    audio: Annotated[UploadFile | None, File(description="Optional background music")] = None,
+    audio: Annotated[list[UploadFile] | None, File(description="Background music tracks, played in order")] = None,
     sort: Annotated[Literal["none", "name", "name_desc"], Form()] = "none",
 ) -> dict:
     """Start a conversion. Poll `GET /v1/jobs/{id}` until status is `done`."""
@@ -187,7 +198,7 @@ def delete_job(job_id: str) -> None:
 async def convert(
     files: Annotated[list[UploadFile], File()],
     opts: Annotated[RenderOptions, Depends(options_form)],
-    audio: Annotated[UploadFile | None, File()] = None,
+    audio: Annotated[list[UploadFile] | None, File()] = None,
     sort: Annotated[Literal["none", "name", "name_desc"], Form()] = "none",
 ) -> FileResponse:
     """Synchronous shortcut: upload and wait for the video in one request (small jobs)."""

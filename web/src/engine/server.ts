@@ -54,7 +54,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export async function renderOnServer(
   items: Item[],
   opts: RenderOptions,
-  audio: File | null,
+  audio: File[],
   onProgress: (p: Progress) => void,
   signal: AbortSignal,
 ): Promise<RenderResult> {
@@ -63,7 +63,7 @@ export async function renderOnServer(
 
   const form = new FormData();
   for (const it of items) form.append("files", it.file, it.file.name);
-  if (audio) form.append("audio", audio, audio.name);
+  for (const track of audio) form.append("audio", track, track.name);
   for (const [k, v] of Object.entries(opts)) form.append(k, String(v));
 
   const job = await upload(`${base}/v1/jobs`, form, (v) => onProgress({ stage: "upload", value: v }), signal);

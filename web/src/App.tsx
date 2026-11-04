@@ -4,10 +4,12 @@ import { formatDuration, itemEstimate, totalEstimate } from "./engine/duration";
 import { ACCEPT, isAccepted } from "./formats";
 import { sortDate } from "./engine/metadata";
 import { TRANSITIONS } from "./engine/transitions";
+import { totalLength } from "./engine/playlist";
+import Music from "./Music";
 import { BrowserUnsupported, browserCanRender, renderInBrowser } from "./engine/browser";
 // setApiUrl is used by the hidden "Where to convert" block below.
 import { checkServer, getApiUrl, renderOnServer /*, setApiUrl */ } from "./engine/server";
-import { defaultOptions, type EngineChoice, type Item, type OutFormat, type Progress, type RenderOptions, type RenderResult } from "./engine/types";
+import { defaultOptions, type EngineChoice, type Item, type OutFormat, type Track, type Progress, type RenderOptions, type RenderResult } from "./engine/types";
 import { t } from "./i18n";
 
 const PRESETS = [
@@ -23,7 +25,7 @@ let nextId = 0;
 export default function App() {
   const [items, setItems] = useState<Item[]>([]);
   const [opts, setOpts] = useState<RenderOptions>(defaultOptions);
-  const [audio, setAudio] = useState<File | null>(null);
+  const [tracks, setTracks] = useState<Track[]>([]);
   // Setters are used by the hidden "Where to convert" block below.
   const [engine /*, setEngine */] = useState<EngineChoice>("auto");
   const [apiUrl /*, setApiUrlState */] = useState(getApiUrl());
@@ -85,6 +87,13 @@ export default function App() {
   const estimate = useMemo(() => totalEstimate(items, opts), [items, opts]);
   const hasVideo = items.some((i) => i.kind === "video");
   const totalLabel = `${estimate.exact ? "" : "≈ "}${formatDuration(estimate.seconds)}`;
+  const musicSeconds = tracks.some((tr) => tr.duration == null)
+    ? null
+    : totalLength(tracks.map((tr) => tr.duration!), opts.music_transition, opts.music_transition_duration);
+  // Highlight the video length when the music ends before the video does.
+  const musicShort =
+    opts.format !== "gif" && items.length > 0 && tracks.length > 0 && !opts.music_loop &&
+    musicSeconds !== null && musicSeconds < estimate.seconds - 0.05;
 
   const needsServer = items.some((i) => i.browserOk === false);
 
@@ -92,13 +101,14 @@ export default function App() {
     setError(null);
     if (result) URL.revokeObjectURL(result.url);
     setResult(null);
+    const audio = tracks.map((tr) => tr.file);
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setProgress({ stage: "render", value: 0 });
     try {
       let useBrowser = engine === "browser";
       if (engine === "auto") {
-        useBrowser = !needsServer && (await browserCanRender(opts, !!audio));
+        useBrowser = !needsServer && (await browserCanRender(opts, audio.length > 0));
         if (!useBrowser && !serverOk) {
           useBrowser = !needsServer;
           if (!useBrowser) throw new Error(t.needServer);
@@ -181,7 +191,10 @@ export default function App() {
             <>
               <div className="toolbar">
                 <span>
-                  {t.files}: {items.length} · {t.estimate} <b>{totalLabel}</b>
+                  {t.files}: {items.length} · {t.estimate}{" "}
+                  <b className={musicShort ? "short" : ""} title={musicShort ? t.musicShort : undefined}>
+                    {totalLabel}
+                  </b>
                 </span>
                 <span>
                   {(["name", "date"] as const).map((key) => (
@@ -381,10 +394,15 @@ export default function App() {
             </label>
           )}
           {opts.format !== "gif" && (
-            <label>
-              {t.audio}
-              <input type="file" accept="audio/*" onChange={(e) => setAudio(e.target.files?.[0] ?? null)} />
-            </label>
+            <Music
+              tracks={tracks}
+              setTracks={setTracks}
+              opts={opts}
+              set={set}
+              musicSeconds={musicSeconds}
+              videoSeconds={estimate.seconds}
+              short={musicShort}
+            />
           )}
 
           {/* TODO: "Where to convert" block is hidden for now; engine stays "auto".

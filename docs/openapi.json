@@ -348,8 +348,11 @@
           "audio": {
             "anyOf": [
               {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
+                "items": {
+                  "type": "string",
+                  "contentMediaType": "application/octet-stream"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -460,6 +463,30 @@
             "title": "Video Audio",
             "description": "Keep the sound of uploaded video clips",
             "default": false
+          },
+          "music_transition": {
+            "type": "string",
+            "enum": [
+              "none",
+              "crossfade",
+              "gap"
+            ],
+            "title": "Music Transition",
+            "description": "Between music tracks: back to back, overlap, or silence",
+            "default": "none"
+          },
+          "music_transition_duration": {
+            "type": "number",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Music Transition Duration",
+            "default": 2.0
+          },
+          "music_loop": {
+            "type": "boolean",
+            "title": "Music Loop",
+            "description": "Repeat the music if it is shorter than the video",
+            "default": false
           }
         },
         "type": "object",
@@ -482,15 +509,18 @@
           "audio": {
             "anyOf": [
               {
-                "type": "string",
-                "contentMediaType": "application/octet-stream"
+                "items": {
+                  "type": "string",
+                  "contentMediaType": "application/octet-stream"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
               }
             ],
             "title": "Audio",
-            "description": "Optional background music"
+            "description": "Background music tracks, played in order"
           },
           "sort": {
             "type": "string",
@@ -594,6 +624,30 @@
             "type": "boolean",
             "title": "Video Audio",
             "description": "Keep the sound of uploaded video clips",
+            "default": false
+          },
+          "music_transition": {
+            "type": "string",
+            "enum": [
+              "none",
+              "crossfade",
+              "gap"
+            ],
+            "title": "Music Transition",
+            "description": "Between music tracks: back to back, overlap, or silence",
+            "default": "none"
+          },
+          "music_transition_duration": {
+            "type": "number",
+            "maximum": 30.0,
+            "minimum": 0.0,
+            "title": "Music Transition Duration",
+            "default": 2.0
+          },
+          "music_loop": {
+            "type": "boolean",
+            "title": "Music Loop",
+            "description": "Repeat the music if it is shorter than the video",
             "default": false
           }
         },

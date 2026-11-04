@@ -12,6 +12,7 @@ from PIL import Image, ImageColor, ImageFilter
 
 from .config import settings
 from .decoders import is_video, load_frames, probe_video
+from .playlist import MUSIC_TRANSITIONS, plan
 from .transitions import TRANSITIONS, blend, picker
 
 Fit = Literal["contain", "cover", "blur"]
@@ -48,6 +49,9 @@ class RenderOptions:
     quality: Literal["low", "medium", "high"] = "medium"
     animate: bool = True  # play animated GIF/WebP/APNG frames
     video_audio: bool = False  # keep the sound of video clips
+    music_transition: str = "none"  # none | crossfade | gap, between music tracks
+    music_transition_duration: float = 2.0
+    music_loop: bool = False  # repeat the music list if it is shorter than the video
     max_side: int = 4096
 
     def validate(self) -> None:
@@ -67,6 +71,10 @@ class RenderOptions:
             raise ValueError("format must be one of: " + ", ".join(FORMATS))
         if self.quality not in QUALITY_CRF:
             raise ValueError("quality must be low, medium or high")
+        if self.music_transition not in MUSIC_TRANSITIONS:
+            raise ValueError("music_transition must be one of: " + ", ".join(MUSIC_TRANSITIONS))
+        if not (0 <= self.music_transition_duration <= 30):
+            raise ValueError("music_transition_duration must be between 0 and 30 seconds")
         ImageColor.getrgb(self.background)
         # Most codecs need even dimensions.
         self.width -= self.width % 2
@@ -178,27 +186,49 @@ def _video_frames(path: Path, opts: RenderOptions) -> Iterator[np.ndarray]:
 
 def _mux_audio(
     video: Path, out: Path, opts: RenderOptions, total: float,
-    clips: list[tuple[Path, float, float]], music: Path | None,
+    clips: list[tuple[Path, float, float]], music: list[Path],
 ) -> None:
     """Add clip sound (at the right offsets) and background music to a silent video."""
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", str(video)]
     filters, labels = [], []
-    for k, (clip, start, dur) in enumerate(clips):
+    norm = "aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo"
+    for clip, start, dur in clips:
         cmd += ["-i", str(clip)]
+        k = len(labels)
         filters.append(
-            f"[{k + 1}:a:0]atrim=0:{dur:.3f},asetpts=PTS-STARTPTS,"
-            f"aresample=48000,adelay={int(start * 1000)}:all=1[c{k}]"
+            f"[{k + 1}:a:0]atrim=0:{dur:.3f},asetpts=PTS-STARTPTS,{norm},"
+            f"adelay={int(start * 1000)}:all=1[a{k}]"
         )
-        labels.append(f"[c{k}]")
-    if music:
-        cmd += ["-i", str(music)]
-        # Quieter music when clips have their own sound; fade out at the end.
-        volume = 0.5 if clips else 1.0
+        labels.append(f"[a{k}]")
+
+    durations = [probe_video(m)["duration"] for m in music]
+    placed = plan(durations, opts.music_transition, opts.music_transition_duration,
+                  loop=opts.music_loop, until=total)
+    placed = [p for p in placed if p.start < total]
+    # Quieter music when clips have their own sound.
+    volume = 0.5 if clips else 1.0
+    music_labels = []
+    for p in placed:
+        cmd += ["-i", str(music[p.index])]
+        k = len(labels) + len(music_labels)
+        chain = f"[{k + 1}:a:0]atrim=0:{p.length:.3f},asetpts=PTS-STARTPTS,{norm}"
+        if p.fade_in:
+            chain += f",afade=t=in:d={p.fade_in:.3f}"
+        if p.fade_out:
+            chain += f",afade=t=out:st={p.length - p.fade_out:.3f}:d={p.fade_out:.3f}"
+        chain += f",adelay={int(p.start * 1000)}:all=1[m{k}]"
+        filters.append(chain)
+        music_labels.append(f"[m{k}]")
+    if music_labels:
+        # Mix the tracks, then fade the whole music out at the end of the video.
         filters.append(
-            f"[{len(clips) + 1}:a:0]aresample=48000,volume={volume},atrim=0:{total:.3f},"
-            f"afade=t=out:st={max(0.0, total - 1.5):.3f}:d=1.5[m]"
+            f"{''.join(music_labels)}amix=inputs={len(music_labels)}:normalize=0:duration=longest,"
+            f"volume={volume},atrim=0:{total:.3f},afade=t=out:st={max(0.0, total - 1.5):.3f}:d=1.5[music]"
         )
-        labels.append("[m]")
+        labels.append("[music]")
+    if not labels:
+        video.replace(out)
+        return
     filters.append(f"{''.join(labels)}amix=inputs={len(labels)}:normalize=0:duration=longest,"
                    f"apad,atrim=0:{total:.3f}[aout]")
     acodec = AUDIO_CODEC[opts.format]
@@ -218,7 +248,7 @@ def render_video(
     paths: list[Path],
     out: Path,
     opts: RenderOptions,
-    audio: Path | None = None,
+    audio: list[Path] | None = None,
     on_progress: Callable[[float, str], None] | None = None,
 ) -> dict:
     """Decode every image and clip, compose frames and encode them into `out`."""
@@ -298,7 +328,7 @@ def render_video(
         raise RuntimeError(f"ffmpeg failed: {err.strip()[-500:]}")
 
     total = frames_written / opts.fps
-    music = audio if opts.format != "gif" else None
+    music = (audio or []) if opts.format != "gif" else []
     if music or clip_audio:
         if on_progress:
             on_progress(0.99, "audio")

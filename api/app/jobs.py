@@ -31,7 +31,7 @@ class Job:
     dir: Path
     inputs: list[Path]
     options: RenderOptions
-    audio: Path | None = None
+    audio: list[Path] = field(default_factory=list)  # background music, in order
     status: str = "queued"  # queued | processing | done | error
     progress: float = 0.0
     message: str = ""

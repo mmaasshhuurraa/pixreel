@@ -125,3 +125,19 @@ button.link.active { font-weight: 700; }
 .error { color: var(--err); margin: 0; }
 .warn { color: var(--warn); font-size: 13px; }
 a { color: var(--accent); }
+
+.short { color: var(--err); }
+.toolbar b.short { background: color-mix(in srgb, var(--err) 15%, transparent); padding: 1px 6px; border-radius: 6px; }
+.tracks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.tracks li { display: flex; align-items: center; gap: 4px; font-size: 13px; }
+.tracks .tname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tracks .tdur { color: var(--muted); font-variant-numeric: tabular-nums; }
+button.icon {
+  border: 1px solid var(--line); background: var(--bg); border-radius: 6px; width: 24px; height: 24px;
+  padding: 0; cursor: pointer; line-height: 1;
+}
+button.icon:disabled { opacity: .35; cursor: default; }
+.btn.small { padding: 6px 10px; font-size: 13px; font-weight: 500; }
+.summary { margin: 0; font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; }
+.summary .hint { flex-basis: 100%; }
+.summary.short b { color: var(--err); }

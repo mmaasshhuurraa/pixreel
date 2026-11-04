@@ -20,7 +20,10 @@ For small jobs there is a one-shot shortcut: `POST /v1/convert` takes the same f
 | Field | Type | Default | Notes |
 |---|---|---|---|
 | `files` | file, repeated | (required) | images and video clips, in the order they should appear |
-| `audio` | file | none | mp3, m4a, aac, wav, ogg, opus, flac; trimmed to the video and faded out |
+| `audio` | file, repeated | none | background music tracks in play order: mp3, m4a, aac, wav, ogg, opus, flac. Cut to the video length and faded out at the end |
+| `music_transition` | `none` \| `crossfade` \| `gap` | `none` | between tracks: back to back, overlap with fades, or silence |
+| `music_transition_duration` | 0 to 30 s | 2 | overlap or pause length; an overlap is at most half of the shorter track |
+| `music_loop` | bool | false | start the track list again if it ends before the video |
 | `sort` | `none` \| `name` \| `name_desc` | `none` | sort files by file name, A→Z or Z→A |
 | `width`, `height` | 16 to 3840 | 1920 × 1080 | rounded down to even numbers |
 | `fps` | 1 to 60 | 30 | |

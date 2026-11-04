@@ -247,3 +247,52 @@ def test_audio_in_other_containers(samples, tmp_path, fmt, acodec):
     r = client.post("/v1/convert", files=files, data={"width": "320", "height": "240", "duration": "1", "format": fmt})
     assert r.status_code == 200, r.text
     assert acodec in {s["codec_name"] for s in _probe(r.content, f".{fmt}", tmp_path)["streams"]}
+
+
+def test_playlist_plan():
+    from app.playlist import plan, total_length
+    assert total_length([30, 20], "none") == 50
+    assert total_length([30, 20], "gap", 2) == 52
+    assert total_length([30, 20], "crossfade", 4) == 46
+    # Crossfade is limited to half of the shorter track.
+    assert total_length([30, 2], "crossfade", 4) == 31
+    looped = plan([30, 20], "none", loop=True, until=120)
+    assert [p.index for p in looped] == [0, 1, 0, 1, 0]
+    assert looped[-1].end >= 120
+
+
+def _sound_spans(path: Path) -> list[tuple[float, float]]:
+    out = subprocess.run(["ffmpeg", "-i", str(path), "-af", "silencedetect=n=-45dB:d=0.3", "-f", "null", "-"],
+                         capture_output=True, text=True).stderr
+    import re
+    starts = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", out)]
+    ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", out)]
+    return list(zip(starts, ends))
+
+
+@pytest.mark.parametrize("mode,dur,loop,silences", [
+    ("none", 0, False, [(5, 8)]),
+    ("gap", 1, False, [(2, 3), (6, 8)]),
+    ("crossfade", 1, False, [(4, 8)]),
+    ("none", 0, True, []),
+])
+def test_music_playlist(samples, tmp_path, mode, dur, loop, silences):
+    tracks = []
+    for k, (f, d) in enumerate([(440, 2), (660, 3)]):
+        p = tmp_path / f"t{k}.wav"
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", f"sine=f={f}:d={d}", str(p)], check=True)
+        tracks.append(("audio", (p.name, p.read_bytes())))
+    files = [("files", ("photo.jpg", samples["photo.jpg"].read_bytes())), *tracks]
+    r = client.post("/v1/convert", files=files, data={
+        "width": "160", "height": "90", "fps": "10", "duration": "8",
+        "music_transition": mode, "music_transition_duration": str(dur), "music_loop": str(loop).lower(),
+    })
+    assert r.status_code == 200, r.text
+    out = tmp_path / "o.mp4"
+    out.write_bytes(r.content)
+    spans = _sound_spans(out)
+    # The last 1.5 s fade out, so ignore silence that starts after 6.5 s when the music is meant to go on.
+    spans = [(a, b) for a, b in spans if a < 6.4]
+    assert len(spans) == len(silences), spans
+    for (a, b), (ea, eb) in zip(spans, silences):
+        assert abs(a - ea) < 0.25 and abs(b - eb) < 0.25, spans

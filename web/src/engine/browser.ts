@@ -20,6 +20,7 @@ import {
 } from "mediabunny";
 import { GIFEncoder, applyPalette, quantize } from "gifenc";
 import { drawTransition, picker } from "./transitions";
+import { plan } from "./playlist";
 import { decodeFrames, decodeVideoAudio, type DecodedFrame } from "./decode";
 import { MIME, type Item, type OutFormat, type Progress, type RenderOptions, type RenderResult } from "./types";
 
@@ -148,11 +149,12 @@ function draw(ctx: CanvasRenderingContext2D, f: DecodedFrame, o: RenderOptions) 
 
 const RATE = 48000;
 
-/** Mix clip sound (at its place in the video) and background music into one buffer. */
+/** Mix clip sound (at its place in the video) and the music playlist into one buffer. */
 async function mixAudio(
   seconds: number,
-  music: File | null,
+  music: File[],
   clips: { file: File; start: number; length: number }[],
+  opts: RenderOptions,
 ): Promise<AudioBuffer> {
   const ctx = new OfflineAudioContext(2, Math.max(1, Math.ceil(seconds * RATE)), RATE);
   for (const clip of clips) {
@@ -165,19 +167,39 @@ async function mixAudio(
       src.start(clip.start + Math.max(0, chunk.at), offset, Math.max(0, clip.length - chunk.at - offset));
     }
   }
-  if (music) {
-    const buf = await ctx.decodeAudioData(await music.arrayBuffer());
-    const gain = ctx.createGain();
-    // Quieter music when clips have their own sound; fade out over the last 1.5 s.
+  if (music.length) {
+    const buffers: (AudioBuffer | null)[] = [];
+    for (const f of music) buffers.push(await ctx.decodeAudioData(await f.arrayBuffer()).catch(() => null));
+    const placed = plan(
+      buffers.map((b) => b?.duration ?? 0),
+      opts.music_transition,
+      opts.music_transition_duration,
+      opts.music_loop ? seconds : undefined,
+    ).filter((p) => p.start < seconds);
+
+    // Master: quieter when clips have their own sound, fade out over the last 1.5 s.
+    const master = ctx.createGain();
     const volume = clips.length ? 0.5 : 1;
     const fadeAt = Math.max(0, seconds - 1.5);
-    gain.gain.setValueAtTime(volume, 0);
-    gain.gain.setValueAtTime(volume, fadeAt);
-    gain.gain.linearRampToValueAtTime(0, seconds);
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(gain).connect(ctx.destination);
-    src.start(0);
+    master.gain.setValueAtTime(volume, 0);
+    master.gain.setValueAtTime(volume, fadeAt);
+    master.gain.linearRampToValueAtTime(0, seconds);
+    master.connect(ctx.destination);
+
+    for (const p of placed) {
+      const src = ctx.createBufferSource();
+      src.buffer = buffers[p.index]!;
+      const g = ctx.createGain();
+      const end = p.start + p.length;
+      g.gain.setValueAtTime(p.fadeIn ? 0 : 1, p.start);
+      if (p.fadeIn) g.gain.linearRampToValueAtTime(1, p.start + p.fadeIn);
+      if (p.fadeOut) {
+        g.gain.setValueAtTime(1, end - p.fadeOut);
+        g.gain.linearRampToValueAtTime(0, end);
+      }
+      src.connect(g).connect(master);
+      src.start(p.start, 0, p.length);
+    }
   }
   return ctx.startRendering();
 }
@@ -185,14 +207,14 @@ async function mixAudio(
 export async function renderInBrowser(
   items: Item[],
   opts: RenderOptions,
-  audio: File | null,
+  audio: File[],
   onProgress: (p: Progress) => void,
   signal: AbortSignal,
 ): Promise<RenderResult> {
   const isGif = opts.format === "gif";
   const clipSound = !isGif && opts.video_audio && items.some((i) => i.kind === "video" && i.hasAudio);
-  const music = isGif ? null : audio;
-  const withAudio = !!music || clipSound;
+  const music = isGif ? [] : audio;
+  const withAudio = music.length > 0 || clipSound;
   if (!(await browserCanRender(opts, withAudio))) {
     throw new BrowserUnsupported("encoder not available");
   }
@@ -260,7 +282,7 @@ export async function renderInBrowser(
     }
     if (t === 0) throw new Error("no file could be decoded");
     onProgress({ stage: "render", value: 0.99 * share, label: withAudio ? "audio" : "" });
-    blob = await sink.finish(withAudio ? () => mixAudio(t, music, clips) : null);
+    blob = await sink.finish(withAudio ? () => mixAudio(t, music, clips, opts) : null);
   } catch (e) {
     await sink.cancel();
     throw e;
